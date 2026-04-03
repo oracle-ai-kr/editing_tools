@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Image → PDF</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#0a0e1a;--surface:#111827;--surface2:#1a2235;
+  --border:#1e2d45;--accent:#00d4ff;--accent2:#00e5a0;
+  --text:#c8d8e8;--text2:#7a8a9a;--danger:#ff4466;--warn:#ffaa00;
+  --glow:0 0 20px rgba(0,212,255,0.15);
+}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;
+  min-height:100vh;padding:16px;padding-bottom:110px;-webkit-user-select:none;user-select:none;}
+
+.header{text-align:center;padding:20px 0 16px;}
+.header h1{font-size:20px;font-weight:700;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.header .sub{font-size:12px;color:var(--text2);margin-top:4px;}
+
+.drop-zone{border:2px dashed var(--border);border-radius:16px;padding:36px 20px;text-align:center;
+  cursor:pointer;transition:all 0.3s;background:var(--surface);}
+.drop-zone:hover,.drop-zone.dragover{border-color:var(--accent);background:rgba(0,212,255,0.03);box-shadow:var(--glow);}
+.drop-zone .icon{font-size:44px;margin-bottom:10px;opacity:0.7;}
+.drop-zone .label{font-size:13px;color:var(--text2);line-height:1.6;}
+.drop-zone .label strong{color:var(--accent);}
+.drop-zone input{display:none;}
+
+/* Page list */
+.page-list{margin-top:14px;}
+.page-list h3{font-size:13px;font-weight:600;color:var(--accent);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.page-item{display:flex;align-items:center;gap:10px;padding:10px 12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;}
+.page-item .pi-num{font-size:11px;color:var(--accent);font-weight:700;width:20px;text-align:center;flex-shrink:0;}
+.page-item .pi-thumb{height:48px;max-width:70px;border-radius:4px;border:1px solid var(--border);
+  object-fit:contain;background:#000;flex-shrink:0;}
+.page-item .pi-info{flex:1;min-width:0;font-size:11px;}
+.page-item .pi-size{color:var(--text2);font-size:10px;margin-top:2px;}
+.page-item .pi-arrows{display:flex;flex-direction:column;gap:2px;flex-shrink:0;}
+.page-item .pi-arrows button{width:24px;height:20px;border-radius:4px;border:none;
+  background:var(--surface2);color:var(--text2);font-size:10px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:0;}
+.page-item .pi-arrows button:disabled{opacity:0.2;}
+.page-item .pi-del{width:26px;height:26px;border-radius:6px;border:none;
+  background:rgba(255,68,102,0.1);color:var(--danger);font-size:12px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.page-count{font-size:11px;color:var(--text2);margin-top:8px;text-align:center;}
+
+/* Bottom */
+.btn-row{position:fixed;bottom:0;left:0;right:0;padding:14px 16px;
+  background:linear-gradient(transparent,var(--bg) 30%);display:flex;gap:8px;z-index:100;}
+.btn{flex:1;padding:13px;border:none;border-radius:11px;font-size:13px;font-weight:600;
+  font-family:inherit;cursor:pointer;transition:all 0.2s;
+  display:flex;align-items:center;justify-content:center;gap:6px;}
+.btn:disabled{opacity:0.4;cursor:not-allowed;}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#0099cc);color:#000;
+  box-shadow:0 4px 20px rgba(0,212,255,0.3);}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border);}
+
+/* ━━━ FULLSCREEN EDITOR ━━━ */
+.editor{display:none;position:fixed;inset:0;z-index:200;background:#111;flex-direction:column;overflow:hidden;}
+.editor.show{display:flex;}
+
+.ed-topbar{display:flex;flex-direction:column;gap:6px;
+  padding:10px 12px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;z-index:10;}
+.ed-topbar .et-row{display:flex;align-items:center;gap:8px;}
+.ed-topbar select{padding:6px 10px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:8px;color:var(--accent);font-size:12px;font-family:'JetBrains Mono',monospace;outline:none;}
+.ed-topbar .et-spacer{flex:1;}
+.ed-topbar .et-info{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);
+  margin-left:4px;white-space:nowrap;}
+.ed-topbar button{padding:8px 14px;border-radius:8px;border:none;font-size:12px;font-weight:600;
+  font-family:inherit;cursor:pointer;white-space:nowrap;}
+.et-newimg{background:var(--surface2);color:var(--accent);border:1px solid var(--border)!important;font-size:11px;padding:6px 10px;}
+.et-cancel{background:var(--surface2);color:var(--text2);border:1px solid var(--border)!important;}
+.et-add{background:var(--accent);color:#000;flex:1;max-width:120px;}
+
+/* Editor body: scrollable, image at original width */
+.ed-body{flex:1;overflow:auto;position:relative;background:#111;-webkit-overflow-scrolling:touch;}
+.ed-img-wrap{position:relative;display:inline-block;}
+.ed-img-wrap img{display:block;user-select:none;-webkit-user-drag:none;pointer-events:none;}
+
+/* Crop box */
+.crop-box{position:absolute;border:2px dashed rgba(0,212,255,0.7);
+  cursor:move;touch-action:none;z-index:10;}
+.crop-box .crop-dim{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);
+  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent);
+  background:rgba(10,14,26,0.8);padding:1px 6px;border-radius:3px;white-space:nowrap;}
+/* Resize handles */
+.crop-handle{position:absolute;width:20px;height:20px;z-index:11;}
+.crop-handle::after{content:'';position:absolute;width:10px;height:10px;background:var(--accent);border-radius:2px;}
+.crop-handle.tl{top:-5px;left:-5px;cursor:nw-resize;}.crop-handle.tl::after{top:0;left:0;}
+.crop-handle.tr{top:-5px;right:-5px;cursor:ne-resize;}.crop-handle.tr::after{top:0;right:0;}
+.crop-handle.bl{bottom:-5px;left:-5px;cursor:sw-resize;}.crop-handle.bl::after{bottom:0;left:0;}
+.crop-handle.br{bottom:-5px;right:-5px;cursor:se-resize;}.crop-handle.br::after{bottom:0;right:0;}
+
+/* Dim overlay outside crop */
+.dim-overlay{position:absolute;inset:0;pointer-events:none;z-index:5;}
+
+/* Bottom bar */
+.ed-bottombar{display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:8px 12px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0;}
+.ed-bottombar button{padding:8px 14px;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface2);color:var(--text);font-size:12px;cursor:pointer;font-family:inherit;}
+.ed-bottombar button:active{background:var(--accent);color:#000;border-color:var(--accent);}
+
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-100px);
+  padding:10px 18px;border-radius:10px;font-size:12px;font-weight:500;z-index:300;
+  transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1);max-width:90%;text-align:center;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast.success{background:rgba(0,229,160,0.15);color:var(--accent2);border:1px solid rgba(0,229,160,0.3);}
+.toast.error{background:rgba(255,68,102,0.15);color:var(--danger);border:1px solid rgba(255,68,102,0.3);}
+
+@media(min-width:600px){body{max-width:640px;margin:0 auto;padding:24px;padding-bottom:110px;}}
+</style>
+</head>
+<body>
+
+<!-- ━━━ MAIN SCREEN ━━━ -->
+<div id="mainScreen">
+<div class="header">
+  <h1>✂️ Image → PDF</h1>
+  <div class="sub">이미지를 용지에 맞춰 잘라서 PDF로 저장</div>
+</div>
+
+<div class="drop-zone" id="dropZone">
+  <div class="icon">🖼️</div>
+  <div class="label">여기를 터치하여 <strong>이미지</strong>를 선택<br>또는 드래그 앤 드롭</div>
+  <input type="file" id="fileInput" accept="image/*">
+</div>
+
+<div class="page-list" id="pageList" style="display:none;">
+  <h3>📋 페이지 목록 <span id="addMoreWrap" style="display:flex;gap:6px;">
+    <button class="btn btn-secondary" style="flex:none;padding:6px 12px;font-size:11px;" onclick="openEditorForNew()">+ 이미지 추가</button>
+  </span></h3>
+  <div id="pageItems"></div>
+  <div class="page-count" id="pageCount"></div>
+</div>
+</div>
+
+<div class="btn-row" id="btnRow">
+  <button class="btn btn-secondary" id="btnAdd" onclick="openEditorForNew()">✂️ 이미지 자르기</button>
+  <button class="btn btn-primary" id="btnPrint" disabled onclick="printPages()">🖨️ PDF 저장</button>
+</div>
+
+<!-- ━━━ FULLSCREEN EDITOR ━━━ -->
+<div class="editor" id="editor">
+  <div class="ed-topbar">
+    <div class="et-row">
+      <select id="edPaper" onchange="updateCropRatio()">
+        <option value="a4">A4</option>
+        <option value="a3">A3</option>
+        <option value="b4">B4</option>
+      </select>
+      <select id="edOrient" onchange="updateCropRatio()">
+        <option value="portrait">세로</option>
+        <option value="landscape">가로</option>
+      </select>
+      <div class="et-info" id="edInfo">—</div>
+    </div>
+    <div class="et-row">
+      <button class="et-newimg" onclick="loadNewInEditor()">📂 새 이미지</button>
+      <button class="et-cancel" onclick="closeEditor()">닫기</button>
+      <div class="et-spacer"></div>
+      <button class="et-add" onclick="addCrop()">✅ 추가</button>
+    </div>
+  </div>
+  
+  <div class="ed-body" id="edBody">
+    <div class="ed-img-wrap" id="edImgWrap">
+      <canvas id="dimCanvas"></canvas>
+      <img id="edImg">
+      <div class="crop-box" id="cropBox">
+        <div class="crop-dim" id="cropDim">—</div>
+        <div class="crop-handle tl" data-dir="tl"></div>
+        <div class="crop-handle tr" data-dir="tr"></div>
+        <div class="crop-handle bl" data-dir="bl"></div>
+        <div class="crop-handle br" data-dir="br"></div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="ed-bottombar">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent2);" id="edPageCount">0장</span>
+    <div style="flex:1;"></div>
+    <button onclick="cropFit()">맞춤</button>
+    <button onclick="cropSize(-50)">축소</button>
+    <button onclick="cropSize(+50)">확대</button>
+    <button onclick="cropReset()">초기화</button>
+  </div>
+</div>
+
+<input type="file" id="hiddenFileInput" accept="image/*" style="display:none;">
+<div class="toast" id="toast"></div>
+
+<script>
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// STATE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let pages = []; // [{dataUrl, w, h}]
+let edImg = null; // current editor Image
+let edImgW = 0, edImgH = 0;
+
+// Crop box state (px, image coordinates)
+let cropX = 0, cropY = 0, cropW = 200, cropH = 280;
+let cropRatioW = 210, cropRatioH = 297; // paper ratio
+
+const PAPERS = { a4:[210,297], a3:[297,420], b4:[257,364] };
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// FILE INPUT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const hiddenInput = document.getElementById('hiddenFileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover');
+  if(e.dataTransfer.files.length) loadAndEdit(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => { if(e.target.files.length) loadAndEdit(e.target.files[0]); fileInput.value=''; });
+hiddenInput.addEventListener('change', e => { if(e.target.files.length) loadAndEdit(e.target.files[0]); hiddenInput.value=''; });
+
+function openEditorForNew() { hiddenInput.click(); }
+
+function loadAndEdit(file) {
+  if(!file.type.startsWith('image/')) { showToast('이미지 파일만 가능','error'); return; }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    edImg = img; edImgW = img.naturalWidth; edImgH = img.naturalHeight;
+    openEditor();
+  };
+  img.src = url;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// EDITOR
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function openEditor() {
+  const ed = document.getElementById('editor');
+  ed.classList.add('show');
+  document.body.style.overflow = 'hidden';
+  
+  const imgEl = document.getElementById('edImg');
+  imgEl.src = edImg.src;
+  
+  // Set image to fill viewport width
+  const bodyW = document.getElementById('edBody').clientWidth;
+  const scale = bodyW / edImgW;
+  imgEl.style.width = bodyW + 'px';
+  imgEl.style.height = Math.round(edImgH * scale) + 'px';
+  
+  const wrap = document.getElementById('edImgWrap');
+  wrap.style.width = bodyW + 'px';
+  wrap.style.height = Math.round(edImgH * scale) + 'px';
+  
+  // Dim canvas
+  const dimC = document.getElementById('dimCanvas');
+  dimC.width = bodyW;
+  dimC.height = Math.round(edImgH * scale);
+  dimC.style.cssText = `position:absolute;inset:0;width:${bodyW}px;height:${dimC.height}px;pointer-events:none;z-index:5;`;
+  
+  updateCropRatio();
+  cropReset();
+  updateEdPageCount();
+}
+
+function closeEditor() {
+  document.getElementById('editor').classList.remove('show');
+  document.body.style.overflow = '';
+  if(edImg) { URL.revokeObjectURL(edImg.src); edImg = null; }
+  renderPageList();
+}
+
+// 편집기 안에서 새 이미지 불러오기
+function loadNewInEditor() {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/*';
+  input.onchange = e => {
+    if(!e.target.files.length) return;
+    const file = e.target.files[0];
+    if(!file.type.startsWith('image/')) { showToast('이미지 파일만 가능','error'); return; }
+    // 기존 이미지 해제
+    if(edImg) URL.revokeObjectURL(edImg.src);
+    const url = URL.createObjectURL(file);
+    const newImg = new Image();
+    newImg.onload = () => {
+      edImg = newImg; edImgW = newImg.naturalWidth; edImgH = newImg.naturalHeight;
+      // 에디터 다시 세팅
+      const imgEl = document.getElementById('edImg');
+      imgEl.src = edImg.src;
+      const bodyW = document.getElementById('edBody').clientWidth;
+      const scale = bodyW / edImgW;
+      imgEl.style.width = bodyW + 'px';
+      imgEl.style.height = Math.round(edImgH * scale) + 'px';
+      const wrap = document.getElementById('edImgWrap');
+      wrap.style.width = bodyW + 'px';
+      wrap.style.height = Math.round(edImgH * scale) + 'px';
+      const dimC = document.getElementById('dimCanvas');
+      dimC.width = bodyW; dimC.height = Math.round(edImgH * scale);
+      dimC.style.height = dimC.height + 'px';
+      cropReset();
+      showToast('새 이미지 로드됨','success');
+    };
+    newImg.src = url;
+  };
+  input.click();
+}
+
+function updateCropRatio() {
+  const paper = document.getElementById('edPaper').value;
+  const orient = document.getElementById('edOrient').value;
+  let [w, h] = PAPERS[paper] || PAPERS.a4;
+  if(orient === 'landscape') { const t=w; w=h; h=t; }
+  cropRatioW = w; cropRatioH = h;
+  // Adjust current crop to new ratio while keeping center
+  const cx = cropX + cropW/2, cy = cropY + cropH/2;
+  cropW = Math.min(cropW, getDisplayW());
+  cropH = Math.round(cropW * (cropRatioH / cropRatioW));
+  if(cropH > getDisplayH()) { cropH = getDisplayH(); cropW = Math.round(cropH * (cropRatioW / cropRatioH)); }
+  cropX = Math.max(0, Math.min(cx - cropW/2, getDisplayW() - cropW));
+  cropY = Math.max(0, Math.min(cy - cropH/2, getDisplayH() - cropH));
+  renderCrop();
+}
+
+function getDisplayW() { return document.getElementById('edImgWrap').clientWidth; }
+function getDisplayH() { return document.getElementById('edImgWrap').clientHeight; }
+function getScale() { return edImgW / getDisplayW(); }
+
+function cropReset() {
+  // Start with crop box ~60% of viewport width, centered
+  const dw = getDisplayW(), dh = getDisplayH();
+  cropW = Math.round(dw * 0.6);
+  cropH = Math.round(cropW * (cropRatioH / cropRatioW));
+  if(cropH > dh * 0.8) { cropH = Math.round(dh * 0.8); cropW = Math.round(cropH * (cropRatioW / cropRatioH)); }
+  cropX = Math.round((dw - cropW) / 2);
+  cropY = Math.round((dh - cropH) / 4); // slightly above center
+  renderCrop();
+}
+
+function cropFit() {
+  // Fit crop to full image width
+  const dw = getDisplayW(), dh = getDisplayH();
+  cropW = dw;
+  cropH = Math.round(cropW * (cropRatioH / cropRatioW));
+  cropX = 0;
+  cropY = 0;
+  if(cropH > dh) { cropH = dh; cropW = Math.round(cropH * (cropRatioW / cropRatioH)); cropX = Math.round((dw-cropW)/2); }
+  renderCrop();
+}
+
+function cropSize(delta) {
+  const dw = getDisplayW(), dh = getDisplayH();
+  const cx = cropX + cropW/2, cy = cropY + cropH/2;
+  cropW = Math.max(60, Math.min(cropW + delta, dw));
+  cropH = Math.round(cropW * (cropRatioH / cropRatioW));
+  if(cropH > dh) { cropH = dh; cropW = Math.round(cropH * (cropRatioW / cropRatioH)); }
+  cropX = Math.max(0, Math.min(Math.round(cx - cropW/2), dw - cropW));
+  cropY = Math.max(0, Math.min(Math.round(cy - cropH/2), dh - cropH));
+  renderCrop();
+}
+
+function renderCrop() {
+  const box = document.getElementById('cropBox');
+  box.style.left = cropX + 'px';
+  box.style.top = cropY + 'px';
+  box.style.width = cropW + 'px';
+  box.style.height = cropH + 'px';
+  
+  // Dim label
+  const s = getScale();
+  const realW = Math.round(cropW * s), realH = Math.round(cropH * s);
+  document.getElementById('cropDim').textContent = `${realW}×${realH}px`;
+  document.getElementById('edInfo').textContent = 
+    `${document.getElementById('edPaper').value.toUpperCase()} ${document.getElementById('edOrient').value==='portrait'?'세로':'가로'} · ${realW}×${realH}`;
+  
+  // Draw dim overlay
+  drawDim();
+}
+
+function drawDim() {
+  const c = document.getElementById('dimCanvas');
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  // Top
+  ctx.fillRect(0, 0, c.width, cropY);
+  // Bottom
+  ctx.fillRect(0, cropY + cropH, c.width, c.height - cropY - cropH);
+  // Left
+  ctx.fillRect(0, cropY, cropX, cropH);
+  // Right
+  ctx.fillRect(cropX + cropW, cropY, c.width - cropX - cropW, cropH);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// CROP BOX DRAG & RESIZE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+let dragMode = null; // 'move' | 'tl' | 'tr' | 'bl' | 'br'
+let dragStartX = 0, dragStartY = 0;
+let dragStartCropX = 0, dragStartCropY = 0, dragStartCropW = 0, dragStartCropH = 0;
+
+const cropBox = document.getElementById('cropBox');
+
+// Handle start
+cropBox.addEventListener('touchstart', onStart, {passive:false});
+cropBox.addEventListener('mousedown', onStart);
+
+function onStart(e) {
+  e.preventDefault(); e.stopPropagation();
+  const t = e.target;
+  if(t.classList.contains('crop-handle')) {
+    dragMode = t.dataset.dir;
+  } else {
+    dragMode = 'move';
+  }
+  const pt = e.touches ? e.touches[0] : e;
+  dragStartX = pt.clientX; dragStartY = pt.clientY;
+  dragStartCropX = cropX; dragStartCropY = cropY;
+  dragStartCropW = cropW; dragStartCropH = cropH;
+  
+  document.addEventListener('touchmove', onMove, {passive:false});
+  document.addEventListener('touchend', onEnd);
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onEnd);
+}
+
+function onMove(e) {
+  if(!dragMode) return;
+  e.preventDefault();
+  const pt = e.touches ? e.touches[0] : e;
+  const dx = pt.clientX - dragStartX;
+  const dy = pt.clientY - dragStartY;
+  const dw = getDisplayW(), dh = getDisplayH();
+  const ratio = cropRatioH / cropRatioW;
+  
+  if(dragMode === 'move') {
+    cropX = Math.max(0, Math.min(dragStartCropX + dx, dw - cropW));
+    cropY = Math.max(0, Math.min(dragStartCropY + dy, dh - cropH));
+  } else {
+    // Resize with ratio lock
+    let newW = dragStartCropW, newX = dragStartCropX, newY = dragStartCropY;
+    
+    if(dragMode === 'br') {
+      newW = Math.max(60, dragStartCropW + dx);
+    } else if(dragMode === 'bl') {
+      newW = Math.max(60, dragStartCropW - dx);
+      newX = dragStartCropX + dragStartCropW - newW;
+    } else if(dragMode === 'tr') {
+      newW = Math.max(60, dragStartCropW + dx);
+    } else if(dragMode === 'tl') {
+      newW = Math.max(60, dragStartCropW - dx);
+      newX = dragStartCropX + dragStartCropW - newW;
+    }
+    
+    let newH = Math.round(newW * ratio);
+    
+    // Top handles: grow upward
+    if(dragMode === 'tl' || dragMode === 'tr') {
+      newY = dragStartCropY + dragStartCropH - newH;
+    }
+    
+    // Clamp to image bounds
+    if(newX < 0) { newX = 0; newW = dragStartCropX + dragStartCropW; newH = Math.round(newW * ratio); if(dragMode==='tl'||dragMode==='tr') newY = dragStartCropY+dragStartCropH-newH; }
+    if(newX + newW > dw) { newW = dw - newX; newH = Math.round(newW * ratio); }
+    if(newY < 0) { newY = 0; newH = dragStartCropY + dragStartCropH; newW = Math.round(newH / ratio); if(dragMode==='tl') newX = dragStartCropX+dragStartCropW-newW; }
+    if(newY + newH > dh) { newH = dh - newY; newW = Math.round(newH / ratio); }
+    
+    cropX = newX; cropY = newY; cropW = newW; cropH = newH;
+  }
+  renderCrop();
+}
+
+function onEnd() {
+  dragMode = null;
+  document.removeEventListener('touchmove', onMove);
+  document.removeEventListener('touchend', onEnd);
+  document.removeEventListener('mousemove', onMove);
+  document.removeEventListener('mouseup', onEnd);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ADD CROP TO LIST
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function addCrop() {
+  const s = getScale();
+  const sx = Math.round(cropX * s), sy = Math.round(cropY * s);
+  const sw = Math.round(cropW * s), sh = Math.round(cropH * s);
+  
+  const c = document.createElement('canvas');
+  c.width = sw; c.height = sh;
+  c.getContext('2d').drawImage(edImg, sx, sy, sw, sh, 0, 0, sw, sh);
+  
+  pages.push({ dataUrl: c.toDataURL('image/jpeg', 0.95), w: sw, h: sh });
+  c.width = 0; c.height = 0;
+  
+  renderPageList();
+  updateEdPageCount();
+  showToast(`페이지 ${pages.length} 추가됨`, 'success');
+  
+  // Move crop box down for next slice
+  const dh = getDisplayH();
+  if(cropY + cropH * 2 <= dh) {
+    cropY += cropH;
+    renderCrop();
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PAGE LIST
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function renderPageList() {
+  const wrap = document.getElementById('pageList');
+  const items = document.getElementById('pageItems');
+  const count = document.getElementById('pageCount');
+  
+  if(pages.length === 0) {
+    wrap.style.display = 'none';
+    document.getElementById('btnPrint').disabled = true;
+    dropZone.style.display = '';
+    return;
+  }
+  wrap.style.display = '';
+  dropZone.style.display = 'none';
+  document.getElementById('btnPrint').disabled = false;
+  
+  items.innerHTML = pages.map((p, i) => `
+    <div class="page-item">
+      <div class="pi-num">${i+1}</div>
+      <img class="pi-thumb" src="${p.dataUrl}">
+      <div class="pi-info">
+        페이지 ${i+1}
+        <div class="pi-size">${p.w}×${p.h}px</div>
+      </div>
+      <div class="pi-arrows">
+        <button onclick="movePage(${i},-1)" ${i===0?'disabled':''}>▲</button>
+        <button onclick="movePage(${i},1)" ${i===pages.length-1?'disabled':''}>▼</button>
+      </div>
+      <button class="pi-del" onclick="removePage(${i})">✕</button>
+    </div>
+  `).join('');
+  count.textContent = `총 ${pages.length}페이지`;
+}
+
+function movePage(idx, dir) {
+  const ni = idx + dir;
+  if(ni < 0 || ni >= pages.length) return;
+  const item = pages.splice(idx, 1)[0];
+  pages.splice(ni, 0, item);
+  renderPageList();
+}
+
+function removePage(idx) {
+  pages.splice(idx, 1);
+  renderPageList();
+}
+
+function updateEdPageCount() {
+  const el = document.getElementById('edPageCount');
+  if(el) el.textContent = pages.length + '장';
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PRINT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function printPages() {
+  if(pages.length === 0) return;
+  
+  const content = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Image PDF</title>
+<style>
+  @page{margin:5mm;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;background:#fff;}
+  img{
+    display:block;
+    width:100%;
+    height:auto;
+    page-break-after:always;
+    page-break-inside:avoid;
+  }
+  img:last-child{page-break-after:auto;}
+  @media print{
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+    img{width:100%;height:auto;}
+  }
+</style></head><body>
+${pages.map(p => `<img src="${p.dataUrl}">`).join('\n')}
+<script>
+  let ld=0;const tt=document.querySelectorAll('img').length;
+  document.querySelectorAll('img').forEach(i=>{
+    if(i.complete){ld++;if(ld>=tt)setTimeout(()=>window.print(),300);}
+    else{i.onload=i.onerror=()=>{ld++;if(ld>=tt)setTimeout(()=>window.print(),300)};}
+  });setTimeout(()=>window.print(),5000);
+<\/script></body></html>`;
+  
+  const w = window.open('','_blank');
+  if(!w){showToast('팝업 차단됨','error');return;}
+  w.document.open();w.document.write(content);w.document.close();
+  showToast('새 탭에서 "PDF로 저장" 선택','success');
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// UTILS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function formatSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';}
+function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type;
+  setTimeout(()=>t.classList.add('show'),10);setTimeout(()=>t.classList.remove('show'),3500);}
+
+// localStorage
+const OPT_KEY='IMG_PDF_OPTS';
+function saveOpts(){try{localStorage.setItem(OPT_KEY,JSON.stringify({
+  paper:document.getElementById('edPaper').value,
+  orient:document.getElementById('edOrient').value
+}));}catch(_){}}
+function loadOpts(){try{const d=JSON.parse(localStorage.getItem(OPT_KEY));
+  if(d){if(d.paper)document.getElementById('edPaper').value=d.paper;
+  if(d.orient)document.getElementById('edOrient').value=d.orient;}}catch(_){}}
+document.getElementById('edPaper').addEventListener('change',saveOpts);
+document.getElementById('edOrient').addEventListener('change',saveOpts);
+loadOpts();
+</script>
+</body>
+</html>
