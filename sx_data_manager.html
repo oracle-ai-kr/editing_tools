@@ -1,0 +1,1563 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#f5f6fa">
+<!-- SIGNAL X DATA MANAGER v1.6 · 임계값 프리셋 + GitHub 적용 · 2026-04-06 -->
+<title>SX Data Manager</title>
+<style>
+:root{
+  --bg:#f5f6fa;--surface:#ffffff;--surface2:#f0f1f5;--border:#e2e4ea;
+  --accent:#3b82f6;--red:#ef4444;--yellow:#f59e0b;--green:#10b981;
+  --orange:#f97316;--violet:#8b5cf6;--rose:#f43f5e;--cyan:#06b6d4;
+  --text:#1e293b;--muted:#64748b;--light-muted:#94a3b8;
+  --mono:'Courier New',monospace;
+  --radius:14px;--shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shadow-lg:0 4px 12px rgba(0,0,0,.08);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,'Noto Sans KR',sans-serif;font-size:14px;overflow-x:hidden;}
+
+/* ── 헤더 ── */
+.app-header{background:var(--surface);padding:14px 20px 12px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;}
+.header-row{display:flex;align-items:center;justify-content:space-between;}
+.header-title{font-size:17px;font-weight:800;letter-spacing:-.3px;display:flex;align-items:center;gap:8px;}
+.header-title .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px rgba(59,130,246,.5);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.header-right{display:flex;align-items:center;gap:10px;}
+.header-btn{background:none;border:none;font-size:18px;cursor:pointer;padding:4px;color:var(--muted);}
+.user-chip{display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:100px;padding:4px 10px 4px 4px;}
+.user-chip img{width:22px;height:22px;border-radius:50%;}
+.user-chip span{font-size:11px;font-weight:600;color:var(--muted);}
+
+/* ── 콘텐츠 ── */
+.content{padding:16px 16px max(80px,calc(16px + env(safe-area-inset-bottom,16px)));max-width:600px;margin:0 auto;}
+
+/* ── 토큰 카드 ── */
+.token-card{background:var(--surface);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);margin-bottom:16px;}
+.token-card h3{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+.token-input-wrap{display:flex;gap:8px;}
+.token-input-wrap input{flex:1;background:var(--surface2);border:1.5px solid var(--border);color:var(--text);padding:10px 14px;border-radius:10px;font-size:15px;outline:none;font-family:var(--mono);}
+.token-input-wrap input:focus{border-color:var(--accent);}
+.token-input-wrap button{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;}
+.token-input-wrap button:active{filter:brightness(.9);}
+.token-status{font-size:12px;margin-top:8px;min-height:16px;color:var(--muted);}
+.token-guide{font-size:11px;color:var(--light-muted);margin-top:10px;line-height:1.8;background:var(--surface2);border-radius:10px;padding:10px 14px;}
+.token-connected{display:flex;align-items:center;justify-content:space-between;}
+.token-connected .badge{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--green);}
+.token-connected button{background:none;border:1.5px solid var(--border);color:var(--muted);border-radius:8px;padding:5px 12px;font-size:11px;cursor:pointer;font-weight:600;}
+
+/* ── 아이콘 그리드 (티맵 스타일) ── */
+.grid-section{background:var(--surface);border-radius:var(--radius);padding:16px 12px;box-shadow:var(--shadow);margin-bottom:16px;}
+.grid-tabs{display:flex;gap:0;margin-bottom:14px;border-bottom:1px solid var(--border);padding:0 4px;}
+.grid-tab{flex:1;text-align:center;padding:8px 0;font-size:13px;font-weight:600;color:var(--light-muted);cursor:pointer;border-bottom:2.5px solid transparent;transition:all .15s;}
+.grid-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.icon-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 4px;}
+.icon-btn{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 4px 10px;border-radius:12px;cursor:pointer;border:none;background:none;transition:all .15s;position:relative;}
+.icon-btn:active{background:var(--surface2);transform:scale(.95);}
+.icon-btn .ic{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;transition:all .15s;}
+.icon-btn .lb{font-size:11px;font-weight:600;color:var(--text);white-space:nowrap;}
+.icon-btn .cnt{position:absolute;top:8px;right:calc(50% - 30px);background:var(--red);color:#fff;font-size:9px;font-weight:800;border-radius:100px;padding:1px 5px;min-width:16px;text-align:center;}
+
+/* ── 파일 브라우저 ── */
+.browser-section{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px;}
+.browser-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);}
+.browser-header h3{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;}
+.browser-header .file-count{font-size:11px;color:var(--light-muted);font-weight:500;}
+.browser-toolbar{display:flex;gap:6px;align-items:center;}
+.tb-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer;color:var(--muted);font-weight:600;display:flex;align-items:center;gap:4px;}
+.tb-btn:active{background:var(--border);}
+.tb-btn.danger{color:var(--red);border-color:var(--red);background:rgba(239,68,68,.05);}
+.folder-group{border-bottom:1px solid var(--border);}
+.folder-group:last-child{border-bottom:none;}
+.folder-row{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;transition:background .1s;}
+.folder-row:active{background:var(--surface2);}
+.folder-row .f-icon{font-size:20px;flex-shrink:0;}
+.folder-row .f-info{flex:1;min-width:0;}
+.folder-row .f-name{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.folder-row .f-desc{font-size:11px;color:var(--light-muted);margin-top:1px;}
+.folder-row .f-count{font-size:11px;color:var(--light-muted);font-weight:600;flex-shrink:0;}
+.folder-row .f-arrow{color:var(--light-muted);font-size:14px;flex-shrink:0;}
+.file-row{display:flex;align-items:center;gap:10px;padding:10px 16px 10px 44px;border-top:1px solid var(--surface2);transition:background .1s;}
+.file-row:active{background:var(--surface2);}
+.file-row .check{width:20px;height:20px;border-radius:6px;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;cursor:pointer;}
+.file-row .check.on{background:var(--accent);border-color:var(--accent);}
+.file-row .check.on::after{content:'✓';color:#fff;font-size:12px;font-weight:800;}
+.file-row .fi-icon{font-size:16px;flex-shrink:0;}
+.file-row .fi-info{flex:1;min-width:0;}
+.file-row .fi-name{font-size:12px;font-weight:600;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.file-row .fi-meta{font-size:10px;color:var(--light-muted);margin-top:1px;}
+.file-row .fi-open{color:var(--accent);font-size:10px;font-weight:700;text-decoration:none;flex-shrink:0;padding:4px 8px;}
+
+/* ── 업로드 모달 ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;display:none;align-items:flex-end;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal-sheet{background:var(--surface);border-radius:20px 20px 0 0;width:100%;max-width:500px;max-height:80vh;overflow-y:auto;padding:20px 20px max(20px,env(safe-area-inset-bottom,20px));animation:slideUp .25s ease-out;}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px;}
+.modal-title{font-size:16px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px;}
+.modal-sub{font-size:12px;color:var(--muted);margin-bottom:16px;}
+.modal-dropzone{border:2px dashed var(--border);border-radius:12px;padding:28px 16px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:12px;}
+.modal-dropzone:active{background:var(--surface2);}
+.modal-dropzone .dz-icon{font-size:32px;margin-bottom:6px;}
+.modal-dropzone .dz-text{font-size:12px;color:var(--muted);font-weight:500;}
+.modal-file-list{margin-bottom:16px;}
+.modal-file-item{display:flex;align-items:center;gap:10px;padding:10px;background:var(--surface2);border-radius:10px;margin-bottom:6px;}
+.modal-file-item .mf-icon{font-size:18px;}
+.modal-file-item .mf-info{flex:1;min-width:0;}
+.modal-file-item .mf-name{font-size:12px;font-weight:600;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.modal-file-item .mf-path{font-size:10px;color:var(--green);margin-top:2px;}
+.modal-file-item .mf-remove{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:0 4px;}
+.modal-btn{width:100%;padding:14px;border-radius:12px;border:none;font-size:15px;font-weight:700;cursor:pointer;transition:all .15s;}
+.modal-btn:active{filter:brightness(.9);}
+.modal-btn.primary{background:var(--accent);color:#fff;}
+.modal-btn.cancel{background:var(--surface2);color:var(--muted);margin-top:8px;}
+.modal-btn:disabled{opacity:.5;cursor:not-allowed;}
+
+/* ── 프로그레스 ── */
+.prog-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin:10px 0;}
+.prog-bar .fill{height:100%;background:var(--accent);border-radius:2px;transition:width .3s;width:0%;}
+.prog-text{font-size:11px;color:var(--muted);text-align:center;}
+
+/* ── 토스트 ── */
+.toast{position:fixed;bottom:max(24px,env(safe-area-inset-bottom,24px));left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);color:#fff;padding:10px 20px;border-radius:100px;font-size:13px;font-weight:600;opacity:0;transition:all .25s;pointer-events:none;z-index:10000;white-space:nowrap;box-shadow:var(--shadow-lg);}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ── 스피너 ── */
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── 빈 상태 ── */
+.empty-state{text-align:center;padding:48px 20px;color:var(--light-muted);}
+.empty-state .em-icon{font-size:40px;margin-bottom:8px;}
+.empty-state .em-text{font-size:13px;font-weight:500;}
+
+/* ── Config Menu ── */
+.cfg-menu{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;}
+.cfg-menu-sheet{background:var(--bg);border-radius:16px 16px 0 0;padding:20px 16px 24px;width:100%;max-width:480px;}
+.cfg-menu-title{font-size:15px;font-weight:700;margin-bottom:12px;text-align:center;}
+.cfg-menu-btns{display:flex;gap:8px;}
+.cfg-menu-btn{flex:1;padding:14px 0;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:600;text-align:center;cursor:pointer;}
+.cfg-menu-btn:active{opacity:.7;}
+.cfg-menu-btn .cb-icon{font-size:22px;display:block;margin-bottom:4px;}
+
+/* ── Threshold Modal ── */
+.th-modal{position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:12px;}
+.th-inner{background:var(--bg);border:1px solid var(--border);border-radius:14px;width:100%;max-width:420px;max-height:85vh;display:flex;flex-direction:column;}
+.th-header{padding:14px 16px 10px;border-bottom:1px solid var(--border);}
+.th-header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.th-title{font-size:15px;font-weight:700;}
+.th-close{font-size:20px;cursor:pointer;padding:4px;color:var(--muted);}
+.th-preset-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.th-preset-chip{font-size:11px;font-weight:600;padding:4px 10px;border-radius:14px;border:1px solid var(--border);background:var(--surface);cursor:pointer;white-space:nowrap;}
+.th-preset-chip.active{background:var(--primary,#3b82f6);color:#fff;border-color:var(--primary,#3b82f6);}
+.th-preset-chip.default{border-style:dashed;}
+.th-preset-add{font-size:11px;font-weight:700;padding:4px 8px;border-radius:14px;border:1px dashed var(--border);background:transparent;cursor:pointer;color:var(--muted);}
+.th-body{flex:1;overflow-y:auto;padding:12px 16px;}
+.th-rule{padding:10px 0;border-bottom:1px solid var(--border);}
+.th-rule:last-child{border-bottom:none;}
+.th-rule-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.th-rule-label{font-size:13px;font-weight:600;}
+.th-rule-sev{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;}
+.th-rule-sev.hard{background:rgba(239,68,68,.12);color:#ef4444;}
+.th-rule-sev.soft{background:rgba(245,158,11,.12);color:#f59e0b;}
+.th-rule-desc{font-size:11px;color:var(--muted);margin-bottom:6px;}
+.th-rule-input{display:flex;align-items:center;gap:8px;}
+.th-rule-input label{font-size:11px;color:var(--muted);min-width:50px;}
+.th-rule-input input{width:72px;height:32px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);text-align:center;font-size:13px;font-weight:600;font-family:inherit;}
+.th-rule-input input:focus{border-color:var(--primary,#3b82f6);outline:none;}
+.th-rule-input .th-unit{font-size:10px;color:var(--muted);}
+.th-footer{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;}
+.th-footer button{flex:1;padding:12px 0;border-radius:8px;border:1px solid var(--border);font-size:13px;font-weight:600;cursor:pointer;}
+.th-footer button:active{opacity:.7;}
+.th-btn-apply{background:var(--primary,#3b82f6)!important;color:#fff!important;border-color:var(--primary,#3b82f6)!important;}
+.th-btn-del{background:transparent;color:#ef4444;border-color:#ef4444;}
+
+/* ── 다크 모드 ── */
+.dark{
+  --bg:#0f1219;--surface:#181d27;--surface2:#1e2532;--border:#2a3444;
+  --text:#e2e8f0;--muted:#94a3b8;--light-muted:#64748b;
+  --shadow:0 1px 3px rgba(0,0,0,.2);--shadow-lg:0 4px 12px rgba(0,0,0,.3);
+}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-row">
+    <div class="header-title">
+      <span class="dot"></span>
+      SX Data Manager
+    </div>
+    <div class="header-right">
+      <div class="user-chip" id="userChip" style="display:none">
+        <img id="userAvatar" src="" alt=""/>
+        <span id="userName"></span>
+      </div>
+      <button class="header-btn" onclick="toggleDark()" title="다크모드">🌗</button>
+      <button class="header-btn" onclick="refreshAll()" title="새로고침">🔄</button>
+    </div>
+  </div>
+</header>
+
+<div class="content">
+
+  <!-- 토큰 카드 -->
+  <div class="token-card" id="tokenCard">
+    <div id="tokenForm">
+      <h3>🔑 GitHub 연결</h3>
+      <div class="token-input-wrap">
+        <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxx" onkeydown="if(event.key==='Enter')saveToken()"/>
+        <button onclick="saveToken()">연결</button>
+      </div>
+      <div class="token-status" id="tokenStatus"></div>
+      <div class="token-guide" id="tokenGuide">
+        github.com → Settings → Developer settings<br>
+        → Personal access tokens → Tokens (classic)<br>
+        → Generate → <b style="color:var(--accent)">repo 권한</b> + <b style="color:var(--accent)">No expiration</b>
+      </div>
+    </div>
+    <div id="tokenConnected" class="token-connected" style="display:none;">
+      <div class="badge">✅ 연결됨 · <span id="connectedRepo">signal-x-data</span></div>
+      <button onclick="clearToken()">연결 해제</button>
+    </div>
+  </div>
+
+  <!-- 퀵 업로드 그리드 -->
+  <div class="grid-section" id="gridSection" style="display:none;">
+    <div class="grid-tabs">
+      <div class="grid-tab active" onclick="setGridTab('upload')">📤 빠른 업로드</div>
+      <div class="grid-tab" onclick="setGridTab('tools')">🛠 도구</div>
+    </div>
+    <div id="gridUpload" class="icon-grid">
+      <button class="icon-btn" onclick="openUpload('market')">
+        <div class="ic" style="background:rgba(139,92,246,.1);">🌐</div>
+        <span class="lb">시장브리핑</span>
+      </button>
+      <button class="icon-btn" onclick="openUpload('ranking')">
+        <div class="ic" style="background:rgba(245,158,11,.1);">🏆</div>
+        <span class="lb">종목랭킹</span>
+      </button>
+      <button class="icon-btn" onclick="openUpload('alerts')">
+        <div class="ic" style="background:rgba(239,68,68,.1);">🔔</div>
+        <span class="lb">알림</span>
+      </button>
+      <button class="icon-btn" onclick="openUpload('stocks')">
+        <div class="ic" style="background:rgba(59,130,246,.1);">📈</div>
+        <span class="lb">주식분석</span>
+      </button>
+      <button class="icon-btn" onclick="openUpload('coins')">
+        <div class="ic" style="background:rgba(249,115,22,.1);">🪙</div>
+        <span class="lb">코인분석</span>
+      </button>
+      <button class="icon-btn" onclick="openUpload('daily')">
+        <div class="ic" style="background:rgba(16,185,129,.1);">📅</div>
+        <span class="lb">일별데이터</span>
+      </button>
+      <button class="icon-btn" onclick="openConfigMenu()">
+        <div class="ic" style="background:rgba(6,182,212,.1);">⚙️</div>
+        <span class="lb">분석규칙</span>
+      </button>
+      <button class="icon-btn" onclick="openUpload(null)">
+        <div class="ic" style="background:rgba(100,116,139,.1);">📁</div>
+        <span class="lb">루트</span>
+      </button>
+      <button class="icon-btn" onclick="openUpload('__pick__')">
+        <div class="ic" style="background:rgba(6,182,212,.1);">📤</div>
+        <span class="lb">직접선택</span>
+      </button>
+    </div>
+    <div id="gridTools" class="icon-grid" style="display:none;">
+      <button class="icon-btn" onclick="toggleDeleteMode()">
+        <div class="ic" style="background:rgba(239,68,68,.1);">🗑</div>
+        <span class="lb">삭제모드</span>
+      </button>
+      <button class="icon-btn" onclick="refreshAll()">
+        <div class="ic" style="background:rgba(59,130,246,.1);">🔄</div>
+        <span class="lb">새로고침</span>
+      </button>
+      <button class="icon-btn" onclick="openRepoInBrowser()">
+        <div class="ic" style="background:rgba(100,116,139,.1);">🌍</div>
+        <span class="lb">Pages열기</span>
+      </button>
+      <button class="icon-btn" onclick="openGitHubRepo()">
+        <div class="ic" style="background:rgba(30,41,59,.1);">🐙</div>
+        <span class="lb">GitHub</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 파일 브라우저 -->
+  <div class="browser-section" id="browserSection" style="display:none;">
+    <div class="browser-header">
+      <h3>📂 signal-x-data <span class="file-count" id="totalCount"></span></h3>
+      <div class="browser-toolbar" id="browserToolbar">
+        <button class="tb-btn" id="btnSelectAll" style="display:none;" onclick="toggleSelectAll()">전체선택</button>
+        <button class="tb-btn danger" id="btnDeleteSel" style="display:none;" onclick="deleteSelected()">🗑 삭제</button>
+      </div>
+    </div>
+    <div id="browserBody">
+      <div class="empty-state" id="browserEmpty">
+        <div class="em-icon">📡</div>
+        <div class="em-text">연결 후 파일이 표시됩니다</div>
+      </div>
+      <div id="fileTree"></div>
+    </div>
+    <div id="browserLoading" style="display:none;padding:24px;text-align:center;">
+      <span class="spinner"></span>
+      <span style="font-size:12px;color:var(--muted);margin-left:8px;" id="loadingText">파일 목록 로딩 중...</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- 업로드 모달 -->
+<div class="modal-overlay" id="uploadModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modalTitle">📈 주식분석 업로드</div>
+    <div class="modal-sub" id="modalSub">stocks/ 폴더에 자동 배포됩니다</div>
+    <input type="file" id="modalFileInput" multiple accept=".json" style="display:none;" onchange="handleModalFiles(this)"/>
+    <div class="modal-dropzone" id="modalDropzone" onclick="document.getElementById('modalFileInput').click()">
+      <div class="dz-icon">📂</div>
+      <div class="dz-text">JSON 파일 선택 (다중 가능)</div>
+    </div>
+    <div class="modal-file-list" id="modalFileList"></div>
+    <div class="prog-bar" id="uploadProg" style="display:none;"><div class="fill" id="uploadProgFill"></div></div>
+    <div class="prog-text" id="uploadProgText" style="display:none;"></div>
+    <button class="modal-btn primary" id="btnUpload" onclick="executeUpload()" disabled>업로드</button>
+    <button class="modal-btn cancel" onclick="closeUploadModal()">취소</button>
+  </div>
+</div>
+
+<!-- 폴더 선택 모달 (직접선택용) -->
+<div class="modal-overlay" id="folderPickModal">
+  <div class="modal-sheet" style="max-height:50vh;">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📁 배포 폴더 선택</div>
+    <div class="modal-sub">파일을 어디에 올릴까요?</div>
+    <div id="folderPickList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;"></div>
+    <button class="modal-btn cancel" onclick="closeFolderPick()">취소</button>
+  </div>
+</div>
+
+<!-- 분석규칙 메뉴 -->
+<div class="cfg-menu" id="cfgMenu" style="display:none;" onclick="if(event.target===this)closeCfgMenu()">
+  <div class="cfg-menu-sheet">
+    <div class="cfg-menu-title">⚙️ 분석규칙</div>
+    <div class="cfg-menu-btns">
+      <button class="cfg-menu-btn" onclick="closeCfgMenu();openUpload('config')"><span class="cb-icon">📤</span>빠른 업로드</button>
+      <button class="cfg-menu-btn" onclick="closeCfgMenu();openThresholdModal()"><span class="cb-icon">🎛️</span>임계값 설정</button>
+    </div>
+  </div>
+</div>
+
+<!-- 임계값 설정 모달 -->
+<div class="th-modal" id="thModal" style="display:none;" onclick="if(event.target===this)closeThModal()">
+  <div class="th-inner">
+    <div class="th-header">
+      <div class="th-header-top">
+        <span class="th-title">🎛️ 스마트분석 임계값</span>
+        <span class="th-close" onclick="closeThModal()">✕</span>
+      </div>
+      <div class="th-preset-row" id="thPresetRow"></div>
+    </div>
+    <div class="th-body" id="thBody"></div>
+    <div class="th-footer">
+      <button class="th-btn-del" id="thDelBtn" onclick="deleteThPreset()" style="display:none;">삭제</button>
+      <button class="th-btn-apply" onclick="applyThPreset()">GitHub 적용</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════════
+const GH_API='https://api.github.com';
+const TOKEN_KEY='GH_DEPLOY_TOKEN';
+const REPO_NAME='signal-x-data';
+const FOLDERS=[
+  {key:'market',  icon:'🌐',color:'#8b5cf6',name:'시장브리핑',  desc:'market/latest.json',  policy:'최신 1건 덮어쓰기'},
+  {key:'ranking', icon:'🏆',color:'#f59e0b',name:'종목랭킹',   desc:'ranking/latest.json', policy:'최신 1건 덮어쓰기'},
+  {key:'alerts',  icon:'🔔',color:'#ef4444',name:'알림',       desc:'alerts/latest.json',  policy:'최신 1건 덮어쓰기'},
+  {key:'stocks',  icon:'📈',color:'#3b82f6',name:'주식분석',   desc:'stocks/{symbol}.json', policy:'종목당 1건'},
+  {key:'coins',   icon:'🪙',color:'#f97316',name:'코인분석',   desc:'coins/{symbol}.json',  policy:'코인당 1건'},
+  {key:'daily',   icon:'📅',color:'#10b981',name:'일별데이터', desc:'daily/{date}.json',    policy:'날짜별 누적'},
+  {key:'config',  icon:'⚙️',color:'#06b6d4',name:'분석규칙',   desc:'config/sx_smart_rules.json', policy:'최신 1건 덮어쓰기'},
+];
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+const S={token:'',user:null,repoFiles:[],deleteMode:false};
+let _uploadTarget=null; // 현재 업로드 대상 폴더 key
+let _uploadFiles=[];    // 업로드 대기 파일 [{file, deployPath}]
+let _checked=new Set();
+
+// ── 파일명 자동 변환 ──
+function autoDeployName(folderKey, fileName){
+  const name=fileName.replace(/\s/g,'');
+  if(folderKey==='market'||folderKey==='ranking'||folderKey==='alerts'){
+    return `${folderKey}/latest.json`;
+  }
+  if(folderKey==='stocks'){
+    // 6자리 숫자 추출 → {code}.KS.json
+    const m=name.match(/(\d{6})/);
+    if(m) return `stocks/${m[1]}.KS.json`;
+    // 영문 심볼 (예: AAPL_signal_x.json → AAPL.json)
+    const m2=name.match(/^([A-Z]{1,5})/i);
+    if(m2) return `stocks/${m2[1].toUpperCase()}.json`;
+    return `stocks/${name}`;
+  }
+  if(folderKey==='coins'){
+    // 코인 심볼 추출 (예: BTC_signal_x.json → BTC.json)
+    const m=name.match(/^([A-Z]{2,10})/i);
+    if(m) return `coins/${m[1].toUpperCase()}.json`;
+    return `coins/${name}`;
+  }
+  if(folderKey==='daily'){
+    // 날짜 패턴 있으면 유지, 없으면 오늘 날짜
+    const m=name.match(/(\d{4}-\d{2}-\d{2})/);
+    if(m) return `daily/${m[1]}.json`;
+    const today=new Date().toISOString().slice(0,10);
+    return `daily/${today}.json`;
+  }
+  // 기타/루트 → 원본 그대로
+  return folderKey ? `${folderKey}/${name}` : name;
+}
+
+const Store={
+  get:k=>{try{return localStorage.getItem(k);}catch(_){return null;}},
+  set:(k,v)=>{try{localStorage.setItem(k,v);}catch(_){}},
+  remove:k=>{try{localStorage.removeItem(k);}catch(_){}},
+};
+
+// ══════════════════════════════════════════════
+// UI HELPERS
+// ══════════════════════════════════════════════
+function toast(msg,ms=1800){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),ms);
+}
+function _esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function toggleDark(){
+  document.body.classList.toggle('dark');
+  Store.set('SX_DM_DARK',document.body.classList.contains('dark')?'1':'0');
+}
+
+function setGridTab(tab){
+  document.querySelectorAll('.grid-tab').forEach((t,i)=>{
+    t.classList.toggle('active',i===(tab==='upload'?0:1));
+  });
+  document.getElementById('gridUpload').style.display=tab==='upload'?'grid':'none';
+  document.getElementById('gridTools').style.display=tab==='tools'?'grid':'none';
+}
+
+// ══════════════════════════════════════════════
+// GITHUB API (deployer에서 가져온 핵심 로직)
+// ══════════════════════════════════════════════
+async function ghFetch(path,opts={}){
+  const exec=async()=>{
+    const res=await fetch(`${GH_API}${path}`,{
+      ...opts,
+      headers:{
+        'Authorization':`Bearer ${S.token}`,
+        'Accept':'application/vnd.github+json',
+        'X-GitHub-Api-Version':'2022-11-28',
+        ...(opts.headers||{}),
+      },
+    });
+    if(res.status===401){
+      clearToken();
+      throw new Error('토큰이 만료/무효화되었습니다. 새 토큰을 입력해주세요.');
+    }
+    if(res.status===403){
+      const remain=res.headers.get('x-ratelimit-remaining');
+      if(remain==='0'){
+        const reset=parseInt(res.headers.get('x-ratelimit-reset')||'0',10);
+        const wait=Math.max(0,reset-Math.floor(Date.now()/1000));
+        if(wait<=60){
+          toast(`API 제한 — ${wait}초 대기...`,wait*1000);
+          await new Promise(r=>setTimeout(r,(wait+1)*1000));
+          return '__RETRY__';
+        }
+        throw new Error(`API 호출 한도 초과. ${Math.ceil(wait/60)}분 후 재시도해주세요.`);
+      }
+    }
+    if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.message||`HTTP ${res.status}`);}
+    return res.status===204?null:res.json();
+  };
+  let result=await exec();
+  if(result==='__RETRY__')result=await exec();
+  return result;
+}
+
+async function readBase64(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=e=>res(e.target.result.split(',')[1]);
+    r.onerror=rej;
+    r.readAsDataURL(file);
+  });
+}
+
+async function uploadFile(path,content,msg){
+  const encoded=path.split('/').map(s=>encodeURIComponent(s)).join('/');
+  let sha;
+  try{const ex=await ghFetch(`/repos/${S.user.login}/${REPO_NAME}/contents/${encoded}`);sha=ex.sha;}catch(_){sha=null;}
+  await ghFetch(`/repos/${S.user.login}/${REPO_NAME}/contents/${encoded}`,{
+    method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({message:msg,content,...(sha?{sha}:{})}),
+  });
+  // 업로드 시각 기록
+  try{
+    const dates=JSON.parse(Store.get('SX_FILE_DATES')||'{}');
+    dates[path]=new Date().toISOString();
+    Store.set('SX_FILE_DATES',JSON.stringify(dates));
+    if(S.fileDates) S.fileDates[path]=dates[path];
+  }catch(_){}
+}
+
+// ══════════════════════════════════════════════
+// TOKEN
+// ══════════════════════════════════════════════
+async function saveToken(){
+  const t=document.getElementById('tokenInput').value.trim();
+  if(!t){toast('토큰을 입력해주세요');return;}
+  S.token=t;Store.set(TOKEN_KEY,t);
+  const status=document.getElementById('tokenStatus');
+  status.innerHTML='<span class="spinner"></span> 연결 중...';
+  try{
+    const u=await ghFetch('/user');
+    S.user=u;
+    // signal-x-data repo 존재 확인
+    try{
+      await ghFetch(`/repos/${u.login}/${REPO_NAME}`);
+    }catch(_){
+      status.innerHTML=`<span style="color:var(--red)">❌ ${REPO_NAME} 저장소를 찾을 수 없습니다</span>`;
+      return;
+    }
+    showConnected();
+    await loadFiles();
+  }catch(e){
+    status.innerHTML=`<span style="color:var(--red)">❌ ${_esc(e.message)}</span>`;
+  }
+}
+
+function clearToken(){
+  Store.remove(TOKEN_KEY);
+  S.token='';S.user=null;S.repoFiles=[];
+  document.getElementById('tokenForm').style.display='block';
+  document.getElementById('tokenConnected').style.display='none';
+  document.getElementById('tokenInput').value='';
+  document.getElementById('tokenStatus').innerHTML='';
+  document.getElementById('tokenGuide').style.display='block';
+  document.getElementById('gridSection').style.display='none';
+  document.getElementById('browserSection').style.display='none';
+  document.getElementById('userChip').style.display='none';
+}
+
+function showConnected(){
+  document.getElementById('tokenForm').style.display='none';
+  document.getElementById('tokenConnected').style.display='flex';
+  document.getElementById('gridSection').style.display='block';
+  document.getElementById('browserSection').style.display='block';
+  document.getElementById('userAvatar').src=S.user.avatar_url;
+  document.getElementById('userName').textContent=S.user.login;
+  document.getElementById('userChip').style.display='flex';
+}
+
+// ══════════════════════════════════════════════
+// FILE BROWSER
+// ══════════════════════════════════════════════
+async function loadFiles(){
+  const body=document.getElementById('fileTree');
+  const loading=document.getElementById('browserLoading');
+  const empty=document.getElementById('browserEmpty');
+  body.innerHTML='';
+  empty.style.display='none';
+  loading.style.display='block';
+
+  try{
+    const fetchDir=async(path)=>{
+      const url=path
+        ?`/repos/${S.user.login}/${REPO_NAME}/contents/${path}`
+        :`/repos/${S.user.login}/${REPO_NAME}/contents/`;
+      const contents=await ghFetch(url);
+      if(!Array.isArray(contents))return [];
+      let files=[];
+      for(const item of contents){
+        if(item.type==='file'){
+          files.push(item);
+        }else if(item.type==='dir'){
+          document.getElementById('loadingText').textContent=`${item.path}/ 조회 중...`;
+          const sub=await fetchDir(item.path);
+          files=files.concat(sub);
+          await new Promise(r=>setTimeout(r,200));
+        }
+      }
+      return files;
+    };
+    S.repoFiles=await fetchDir('');
+
+    S.fileDates=JSON.parse(Store.get('SX_FILE_DATES')||'{}');
+    loading.style.display='none';
+    renderFileTree();
+    updateFolderCounts();
+  }catch(e){
+    loading.style.display='none';
+    body.innerHTML=`<div class="empty-state"><div class="em-icon">❌</div><div class="em-text">${_esc(e.message)}</div></div>`;
+  }
+}
+
+function formatRelDate(dateStr){
+  const dt=new Date(dateStr);
+  const now=new Date();
+  const diff=now-dt;
+  const mins=Math.floor(diff/60000);
+  const hrs=Math.floor(diff/3600000);
+  const days=Math.floor(diff/86400000);
+  if(mins<1) return '방금';
+  if(mins<60) return `${mins}분 전`;
+  if(hrs<24) return `${hrs}시간 전`;
+  if(days<7) return `${days}일 전`;
+  return `${dt.getMonth()+1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+}
+
+function renderFileTree(){
+  const body=document.getElementById('fileTree');
+  const empty=document.getElementById('browserEmpty');
+  if(S.repoFiles.length===0){
+    empty.style.display='block';
+    body.innerHTML='';
+    document.getElementById('totalCount').textContent='';
+    return;
+  }
+  empty.style.display='none';
+  document.getElementById('totalCount').textContent=`(${S.repoFiles.length}개)`;
+
+  // 폴더별 그룹핑
+  const groups={};
+  S.repoFiles.forEach(f=>{
+    const fpath=f.path||f.name;
+    const parts=fpath.split('/');
+    const dir=parts.length>1?parts[0]:'(루트)';
+    if(!groups[dir])groups[dir]=[];
+    groups[dir].push(f);
+  });
+
+  // 폴더 순서: 정의된 폴더 먼저 → 나머지 → 루트
+  const knownOrder=FOLDERS.map(f=>f.key);
+  const dirs=Object.keys(groups).sort((a,b)=>{
+    if(a==='(루트)')return 1;if(b==='(루트)')return -1;
+    const ai=knownOrder.indexOf(a),bi=knownOrder.indexOf(b);
+    if(ai>=0&&bi>=0)return ai-bi;
+    if(ai>=0)return -1;if(bi>=0)return 1;
+    return a.localeCompare(b);
+  });
+
+  let html='';
+  for(const dir of dirs){
+    const files=groups[dir];
+    const fm=FOLDERS.find(f=>f.key===dir);
+    const icon=fm?fm.icon:'📁';
+    const color=fm?fm.color:'var(--muted)';
+    const dirName=fm?fm.name:dir;
+    const folderId=`folder_${dir.replace(/[^a-zA-Z0-9]/g,'_')}`;
+
+    html+=`<div class="folder-group">
+      <div class="folder-row" onclick="toggleFolder('${folderId}')">
+        <span class="f-icon">${icon}</span>
+        <div class="f-info">
+          <div class="f-name" style="color:${color}">${_esc(dirName)}</div>
+          <div class="f-desc">${fm?fm.desc:dir+'/'}</div>
+        </div>
+        <span class="f-count">${files.filter(f=>!(f.name||'').startsWith('_template')&&(f.name||'')!=='index.json').length}</span>
+        <span class="f-arrow" id="${folderId}_arrow">▸</span>
+      </div>
+      <div id="${folderId}" style="display:none;">`;
+
+    files.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    const visibleFiles=files.filter(f=>!(f.name||'').startsWith('_template'));
+    for(const f of visibleFiles){
+      const fpath=f.path||f.name;
+      const fname=f.name;
+      const size=f.size>=1024?`${(f.size/1024).toFixed(1)}KB`:`${f.size}B`;
+      const fileUrl=`https://${S.user.login}.github.io/${REPO_NAME}/${fpath}`;
+      const checkClass=_checked.has(fpath)?'check on':'check';
+      const dateRaw=S.fileDates?.[fpath]||'';
+      const dateLabel=dateRaw?formatRelDate(dateRaw):'';
+
+      html+=`<div class="file-row">
+        <div class="${checkClass}" data-path="${_esc(fpath)}" onclick="event.stopPropagation();toggleCheck(this.dataset.path)" ${S.deleteMode?'':'style="display:none;"'}></div>
+        <span class="fi-icon">${icon}</span>
+        <div class="fi-info">
+          <div class="fi-name">${_esc(fname)}</div>
+          <div class="fi-meta">${size}${dateLabel?' · '+dateLabel:''}</div>
+        </div>
+        <a href="${_esc(fileUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="fi-open">열기↗</a>
+      </div>`;
+    }
+    html+=`</div></div>`;
+  }
+  body.innerHTML=html;
+  updateDeleteUI();
+}
+
+function toggleFolder(id){
+  const el=document.getElementById(id);
+  const arrow=document.getElementById(id+'_arrow');
+  if(el.style.display==='none'){
+    el.style.display='block';
+    arrow.textContent='▾';
+  }else{
+    el.style.display='none';
+    arrow.textContent='▸';
+  }
+}
+
+function updateFolderCounts(){
+  // 아이콘 그리드에 파일 수 배지 표시 (index.json, _template 제외)
+  const counts={};
+  S.repoFiles.forEach(f=>{
+    const fpath=f.path||f.name||'';
+    const parts=fpath.split('/');
+    const dir=parts[0];
+    const fname=parts[parts.length-1];
+    if(fname==='index.json'||(fname||'').startsWith('_template'))return;
+    if(!counts[dir])counts[dir]=0;
+    counts[dir]++;
+  });
+  document.querySelectorAll('#gridUpload .icon-btn').forEach(btn=>{
+    const onclick=btn.getAttribute('onclick')||'';
+    let folderKey=null;
+    const m1=onclick.match(/openUpload\('(\w+)'\)/);
+    if(m1)folderKey=m1[1];
+    const m2=onclick.match(/openConfigMenu/);
+    if(m2)folderKey='config';
+    if(folderKey){
+      let badge=btn.querySelector('.cnt');
+      if(counts[folderKey]){
+        if(!badge){
+          badge=document.createElement('span');
+          badge.className='cnt';
+          btn.appendChild(badge);
+        }
+        badge.textContent=counts[folderKey];
+      }else if(badge){
+        badge.remove();
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+// DELETE MODE
+// ══════════════════════════════════════════════
+function toggleDeleteMode(){
+  S.deleteMode=!S.deleteMode;
+  _checked.clear();
+  renderFileTree();
+  // 모든 폴더 펼치기 (삭제 모드)
+  if(S.deleteMode){
+    document.querySelectorAll('.folder-group > div[id^="folder_"]').forEach(el=>{
+      el.style.display='block';
+      const arrow=document.getElementById(el.id+'_arrow');
+      if(arrow)arrow.textContent='▾';
+    });
+    toast('삭제 모드 ON — 파일을 선택하세요');
+  }else{
+    toast('삭제 모드 OFF');
+  }
+  updateDeleteUI();
+}
+
+function toggleCheck(fpath){
+  if(_checked.has(fpath))_checked.delete(fpath);
+  else _checked.add(fpath);
+  // 체크박스 UI 갱신
+  document.querySelectorAll('.file-row .check').forEach(el=>{
+    const p=el.dataset.path;
+    el.className=_checked.has(p)?'check on':'check';
+  });
+  updateDeleteUI();
+}
+
+function toggleSelectAll(){
+  if(_checked.size===S.repoFiles.length){
+    _checked.clear();
+  }else{
+    S.repoFiles.forEach(f=>_checked.add(f.path||f.name));
+  }
+  document.querySelectorAll('.file-row .check').forEach(el=>{
+    el.className=_checked.has(el.dataset.path)?'check on':'check';
+  });
+  updateDeleteUI();
+}
+
+function updateDeleteUI(){
+  const btnSA=document.getElementById('btnSelectAll');
+  const btnDel=document.getElementById('btnDeleteSel');
+  if(S.deleteMode){
+    btnSA.style.display='inline-flex';
+    btnSA.textContent=_checked.size===S.repoFiles.length?'전체해제':'전체선택';
+    btnDel.style.display=_checked.size>0?'inline-flex':'none';
+    btnDel.textContent=`🗑 ${_checked.size}개 삭제`;
+  }else{
+    btnSA.style.display='none';
+    btnDel.style.display='none';
+  }
+}
+
+async function deleteSelected(){
+  if(_checked.size===0)return;
+  const paths=[..._checked];
+  if(!confirm(`${paths.length}개 파일을 삭제하시겠습니까?\n\n${paths.slice(0,10).join('\n')}${paths.length>10?'\n...':''}`))return;
+
+  const btn=document.getElementById('btnDeleteSel');
+  btn.disabled=true;btn.textContent='삭제 중...';
+  let deleted=0;
+
+  for(const fpath of paths){
+    try{
+      const encoded=fpath.split('/').map(s=>encodeURIComponent(s)).join('/');
+      const fresh=await ghFetch(`/repos/${S.user.login}/${REPO_NAME}/contents/${encoded}`);
+      await ghFetch(`/repos/${S.user.login}/${REPO_NAME}/contents/${encoded}`,{
+        method:'DELETE',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({message:`Delete ${fpath}`,sha:fresh.sha}),
+      });
+      deleted++;
+      await new Promise(r=>setTimeout(r,400));
+    }catch(e){
+      console.error(`Delete failed: ${fpath}`,e);
+    }
+  }
+
+  toast(`${deleted}개 파일 삭제 완료`);
+  btn.disabled=false;
+  _checked.clear();
+  S.deleteMode=false;
+  await loadFiles();
+}
+
+// ══════════════════════════════════════════════
+// UPLOAD MODAL
+// ══════════════════════════════════════════════
+function openUpload(folderKey){
+  if(!S.user){toast('먼저 GitHub을 연결해주세요');return;}
+
+  if(folderKey==='__pick__'){
+    // 직접 선택: 먼저 파일 선택 → 폴더 선택
+    _uploadTarget='__pick__';
+    _uploadFiles=[];
+    showUploadModal('직접 선택 업로드','폴더를 파일 선택 후 지정합니다');
+    return;
+  }
+
+  _uploadTarget=folderKey;
+  _uploadFiles=[];
+  const fm=FOLDERS.find(f=>f.key===folderKey);
+  if(fm){
+    showUploadModal(`${fm.icon} ${fm.name} 업로드`,`${fm.key}/ 폴더에 자동 배포됩니다 · ${fm.policy}`);
+  }else{
+    showUploadModal('📁 루트 업로드','저장소 루트에 배포됩니다');
+  }
+}
+
+function showUploadModal(title,sub){
+  document.getElementById('modalTitle').innerHTML=_esc(title);
+  document.getElementById('modalSub').textContent=sub;
+  document.getElementById('modalFileList').innerHTML='';
+  document.getElementById('modalFileInput').value='';
+  document.getElementById('btnUpload').disabled=true;
+  document.getElementById('uploadProg').style.display='none';
+  document.getElementById('uploadProgText').style.display='none';
+  document.getElementById('uploadModal').classList.add('show');
+}
+
+function closeUploadModal(){
+  document.getElementById('uploadModal').classList.remove('show');
+  _uploadFiles=[];_uploadTarget=null;
+}
+
+function handleModalFiles(input){
+  const files=Array.from(input.files);
+  if(files.length===0)return;
+
+  files.forEach(f=>{
+    let deployPath;
+    if(_uploadTarget==='__pick__'){
+      deployPath=f.name; // 나중에 폴더 선택
+    }else if(_uploadTarget){
+      deployPath=autoDeployName(_uploadTarget, f.name);
+    }else{
+      deployPath=f.name; // 루트
+    }
+    // 중복 방지
+    if(!_uploadFiles.find(x=>x.deployPath===deployPath)){
+      _uploadFiles.push({file:f,deployPath});
+    }
+  });
+  input.value='';
+
+  if(_uploadTarget==='__pick__'&&_uploadFiles.length>0){
+    // 폴더 선택 모달 표시
+    closeUploadModal();
+    showFolderPick();
+    return;
+  }
+
+  renderModalFiles();
+}
+
+function renderModalFiles(){
+  const list=document.getElementById('modalFileList');
+  const btn=document.getElementById('btnUpload');
+  if(_uploadFiles.length===0){
+    list.innerHTML='';btn.disabled=true;
+    btn.textContent='업로드';return;
+  }
+  btn.disabled=false;
+  btn.textContent=`📤 ${_uploadFiles.length}개 파일 업로드`;
+  list.innerHTML=_uploadFiles.map((f,i)=>{
+    return`<div class="modal-file-item">
+      <span class="mf-icon">📋</span>
+      <div class="mf-info">
+        <div class="mf-name">${_esc(f.file.name)}</div>
+        <div class="mf-path">→ ${_esc(f.deployPath)}</div>
+      </div>
+      <button class="mf-remove" onclick="removeUploadFile(${i})">×</button>
+    </div>`;
+  }).join('');
+}
+
+function removeUploadFile(idx){
+  _uploadFiles.splice(idx,1);
+  renderModalFiles();
+}
+
+// 폴더 선택 (직접선택용)
+function showFolderPick(){
+  const list=document.getElementById('folderPickList');
+  const options=[...FOLDERS,{key:null,icon:'📁',color:'#64748b',name:'루트',desc:'저장소 루트'}];
+  list.innerHTML=options.map(fm=>{
+    const key=fm.key?`'${fm.key}'`:'null';
+    return`<button onclick="pickFolder(${key})" style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;cursor:pointer;text-align:left;transition:all .1s;">
+      <span style="font-size:24px;">${fm.icon}</span>
+      <div>
+        <div style="font-size:14px;font-weight:700;color:${fm.color};">${fm.name}</div>
+        <div style="font-size:11px;color:var(--muted);">${fm.desc}</div>
+      </div>
+    </button>`;
+  }).join('');
+  document.getElementById('folderPickModal').classList.add('show');
+}
+
+function closeFolderPick(){
+  document.getElementById('folderPickModal').classList.remove('show');
+}
+
+function pickFolder(key){
+  closeFolderPick();
+  // 파일 경로 업데이트
+  _uploadTarget=key;
+  _uploadFiles.forEach(f=>{
+    f.deployPath=key?autoDeployName(key, f.file.name):f.file.name;
+  });
+  // 업로드 모달 다시 열기
+  const fm=FOLDERS.find(f=>f.key===key);
+  if(fm){
+    showUploadModal(`${fm.icon} ${fm.name} 업로드`,`${fm.key}/ 폴더에 배포됩니다`);
+  }else{
+    showUploadModal('📁 루트 업로드','저장소 루트에 배포됩니다');
+  }
+  renderModalFiles();
+}
+
+async function executeUpload(){
+  if(_uploadFiles.length===0)return;
+  const btn=document.getElementById('btnUpload');
+  const prog=document.getElementById('uploadProg');
+  const progFill=document.getElementById('uploadProgFill');
+  const progText=document.getElementById('uploadProgText');
+
+  btn.disabled=true;
+  prog.style.display='block';
+  progText.style.display='block';
+
+  let uploaded=0,failed=0;
+  const total=_uploadFiles.length;
+
+  for(let i=0;i<total;i++){
+    const f=_uploadFiles[i];
+    progText.textContent=`${f.file.name} 업로드 중... (${i+1}/${total})`;
+    progFill.style.width=`${((i+1)/total)*100}%`;
+    try{
+      const content=await readBase64(f.file);
+      await uploadFile(f.deployPath,content,`Upload ${f.deployPath}`);
+      uploaded++;
+    }catch(e){
+      failed++;
+      console.error(`Upload failed: ${f.deployPath}`,e);
+    }
+    if(i<total-1)await new Promise(r=>setTimeout(r,300));
+  }
+
+  prog.style.display='none';
+  progText.style.display='none';
+
+  if(failed>0){
+    toast(`${uploaded}개 성공, ${failed}개 실패`);
+  }else{
+    toast(`${uploaded}개 파일 업로드 완료!`);
+  }
+
+  // ── stocks/index.json · coins/index.json 자동 갱신 ──
+  const uploadedFolders=new Set(_uploadFiles.filter(f=>f.deployPath).map(f=>f.deployPath.split('/')[0]));
+  if(uploadedFolders.has('stocks')) await updateFolderIndex('stocks');
+  if(uploadedFolders.has('coins')) await updateFolderIndex('coins');
+
+  // ── daily/ 스냅샷 자동 생성 (stocks/coins 업로드 시) ──
+  if(uploadedFolders.has('stocks')||uploadedFolders.has('coins')){
+    await autoDailySnapshot();
+  }
+
+  // ── daily/index.json 자동 갱신 (직접 daily 업로드 또는 autoDailySnapshot 발생 시) ──
+  const hasDailyFiles=uploadedFolders.has('daily')||_uploadFiles.some(f=>f.deployPath&&f.deployPath.startsWith('daily/'));
+  if(hasDailyFiles) await updateDailyIndex();
+
+  // ── ranking/latest.json 자동 갱신 (BUY 종목만 추출) ──
+  if(uploadedFolders.has('stocks')||uploadedFolders.has('coins')){
+    await updateRankingFromIndex();
+  }
+
+  closeUploadModal();
+  await loadFiles();
+}
+
+// ── daily/ 스냅샷 자동 생성 ──
+// stocks/coins 업로드 시 해당 signal_x JSON을 daily/{오늘}.json에 자동 병합
+async function autoDailySnapshot(){
+  try{
+    const progText=document.getElementById('uploadProgText');
+    const prog=document.getElementById('uploadProg');
+    prog.style.display='block';progText.style.display='block';
+    progText.textContent='daily/ 스냅샷 자동 생성 중...';
+
+    const today=new Date().toISOString().slice(0,10);
+    const dailyPath=`daily/${today}.json`;
+
+    // 1) 기존 daily 파일 fetch (있으면 병합)
+    let existing={date:today,signals:[],updated_at:''};
+    try{
+      const apiData=await ghFetch(`/repos/${S.user.login}/${REPO_NAME}/contents/${dailyPath}`);
+      if(apiData&&apiData.content){
+        const decoded=decodeURIComponent(escape(atob(apiData.content.replace(/\n/g,''))));
+        const j=JSON.parse(decoded);
+        if(j) existing=j;
+        if(!existing.signals) existing.signals=[];
+      }
+    }catch(_){/* 파일 없음 = 신규 생성 */}
+
+    // 2) 이번 업로드된 stocks/coins JSON에서 signal_x 데이터 수집
+    const newSignals=[];
+    for(const f of _uploadFiles){
+      if(!f.deployPath)continue;
+      const folder=f.deployPath.split('/')[0];
+      if(folder!=='stocks'&&folder!=='coins')continue;
+      try{
+        const raw=await readFileText(f.file);
+        const json=JSON.parse(raw);
+        // v2.1 스키마: identity 존재 확인
+        if(json.identity){
+          const sym=json.identity.symbol||json.identity.ticker||f.deployPath.split('/').pop().replace('.json','');
+          newSignals.push({
+            symbol:sym,
+            name:json.identity.name||sym,
+            action:(json.summary||{}).action||'?',
+            score:(json.scoreboard||{}).score||0,
+            grade:(json.summary||{}).grade||'?',
+            data:json
+          });
+        }
+      }catch(_){}
+    }
+
+    if(!newSignals.length){
+      prog.style.display='none';progText.style.display='none';
+      return;
+    }
+
+    // 3) 기존 signals에 병합 (같은 symbol이면 최신으로 덮어쓰기)
+    const merged=[...existing.signals];
+    for(const ns of newSignals){
+      const idx=merged.findIndex(s=>s.symbol===ns.symbol);
+      if(idx>=0) merged[idx]=ns;
+      else merged.push(ns);
+    }
+
+    // 4) daily JSON 구성
+    const dailyJson={
+      date:today,
+      signals:merged,
+      count:merged.length,
+      updated_at:new Date().toISOString()
+    };
+
+    // 5) push
+    const content=btoa(unescape(encodeURIComponent(JSON.stringify(dailyJson,null,2))));
+    await uploadFile(dailyPath,content,`Auto daily snapshot ${today}`);
+
+    // 6) daily/index.json도 갱신 (uploadedFolders에 daily 추가)
+    // _uploadFiles에 daily 항목 추가하여 이후 updateDailyIndex가 자동 처리
+    _uploadFiles.push({file:new Blob(),deployPath:dailyPath});
+
+    prog.style.display='none';progText.style.display='none';
+    toast(`📅 daily/${today}.json 자동 생성 (${merged.length}종목)`);
+  }catch(e){
+    console.error('autoDailySnapshot failed:',e);
+    toast('daily 스냅샷 자동 생성 실패');
+  }
+}
+
+// readFileText 헬퍼
+function readFileText(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=()=>resolve(r.result);
+    r.onerror=()=>reject(new Error('파일 읽기 실패'));
+    r.readAsText(file);
+  });
+}
+
+async function updateDailyIndex(){
+  try{
+    const progText=document.getElementById('uploadProgText');
+    const prog=document.getElementById('uploadProg');
+    prog.style.display='block';progText.style.display='block';
+    progText.textContent='daily/index.json 갱신 중...';
+
+    // 1) 기존 daily/index.json fetch (GitHub API로 직접 - CDN 캐시 회피)
+    let existing=[];
+    try{
+      const apiData=await ghFetch(`/repos/${S.user.login}/${REPO_NAME}/contents/daily/index.json`);
+      if(apiData&&apiData.content){
+        const decoded=decodeURIComponent(escape(atob(apiData.content.replace(/\n/g,''))));
+        const j=JSON.parse(decoded);
+        if(j&&Array.isArray(j.dates))existing=j.dates;
+      }
+    }catch(_){}
+
+    // 2) 이번 업로드에서 날짜 추출
+    const newDates=[];
+    for(const f of _uploadFiles){
+      if(!f.deployPath.startsWith('daily/'))continue;
+      const fileName=f.deployPath.split('/').pop();
+      if(fileName==='index.json')continue;
+      const dm=fileName.match(/(\d{4}-\d{2}-\d{2})/);
+      if(dm) newDates.push(dm[1]);
+    }
+
+    // 3) 머지 + 정렬 (최신 우선)
+    const merged=[...new Set([...existing,...newDates])].sort((a,b)=>b.localeCompare(a));
+
+    // 4) push
+    const payload={dates:merged,updated_at:new Date().toISOString()};
+    const content=btoa(unescape(encodeURIComponent(JSON.stringify(payload,null,2))));
+    await uploadFile('daily/index.json',content,'Update daily/index.json');
+
+    prog.style.display='none';progText.style.display='none';
+    toast(`daily/index.json 갱신 완료 (${merged.length}일)`);
+  }catch(e){
+    console.error('daily/index.json update failed:',e);
+    toast('daily/index.json 갱신 실패');
+  }
+}
+
+async function updateFolderIndex(folder){
+  try{
+    const progText=document.getElementById('uploadProgText');
+    const prog=document.getElementById('uploadProg');
+    prog.style.display='block';progText.style.display='block';
+    progText.textContent=`${folder}/index.json 갱신 중...`;
+
+    // 1) 기존 index.json fetch (GitHub API로 직접 - CDN 캐시 회피)
+    let existing=[];
+    try{
+      const apiData=await ghFetch(`/repos/${S.user.login}/${REPO_NAME}/contents/${folder}/index.json`);
+      if(apiData&&apiData.content){
+        const decoded=decodeURIComponent(escape(atob(apiData.content.replace(/\n/g,''))));
+        const j=JSON.parse(decoded);
+        if(Array.isArray(j))existing=j;
+      }
+    }catch(_){}
+
+    // 2) 이번에 업로드한 파일들에서 JSON 파싱하여 요약 추출
+    const newEntries=[];
+    for(const f of _uploadFiles){
+      if(!f.deployPath.startsWith(folder+'/'))continue;
+      const fileName=f.deployPath.split('/').pop();
+      if(fileName==='index.json')continue;
+      try{
+        const text=await f.file.text();
+        const json=JSON.parse(text);
+        const sym=json.identity?.symbol||fileName.replace('.json','');
+        const entry={
+          symbol:sym,
+          name:json.identity?.name||json.summary?.name||sym,
+          action:json.summary?.action||'—',
+          score:json.summary?.score??json.scoreboard?.total?.score??0,
+          grade:json.summary?.grade||'—',
+          sector:json.identity?.sector||'',
+          updated:json.meta?.analysis_date||new Date().toISOString().slice(0,10)
+        };
+        if(json.summary?.label) entry.label=json.summary.label;
+        if(json.scoreboard?.sources?.risk?.score!=null) entry.risk=json.scoreboard.sources.risk.score;
+        newEntries.push(entry);
+      }catch(e){console.warn('index parse skip:',fileName,e);}
+    }
+
+    // 3) 기존 목록에 머지 (같은 symbol이면 덮어쓰기)
+    const map=new Map();
+    existing.forEach(e=>map.set(e.symbol,e));
+    newEntries.forEach(e=>map.set(e.symbol,e));
+    const merged=[...map.values()].sort((a,b)=>(b.score||0)-(a.score||0));
+
+    // 4) index.json push
+    const content=btoa(unescape(encodeURIComponent(JSON.stringify(merged,null,2))));
+    await uploadFile(`${folder}/index.json`,content,`Update ${folder}/index.json`);
+
+    prog.style.display='none';progText.style.display='none';
+    toast(`${folder}/index.json 갱신 완료 (${merged.length}종목)`);
+  }catch(e){
+    console.error(`${folder}/index.json update failed:`,e);
+    toast(`${folder}/index.json 갱신 실패`);
+  }
+}
+
+// ── ranking/latest.json 자동 갱신 ──
+async function updateRankingFromIndex(){
+  try{
+    // stocks + coins index.json 모두 fetch (GitHub API - CDN 캐시 회피)
+    const allEntries=[];
+    for(const folder of ['stocks','coins']){
+      try{
+        const apiData=await ghFetch(`/repos/${S.user.login}/${REPO_NAME}/contents/${folder}/index.json`);
+        if(apiData&&apiData.content){
+          const decoded=decodeURIComponent(escape(atob(apiData.content.replace(/\n/g,''))));
+          const j=JSON.parse(decoded);
+          if(Array.isArray(j))allEntries.push(...j);
+        }
+      }catch(_){}
+    }
+    if(allEntries.length===0)return;
+
+    // 카테고리 분류
+    const topPicks=allEntries.filter(s=>s.action==='BUY').sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,10).map(s=>({
+      symbol:s.symbol,name:s.name,action:s.action,score:s.score,grade:s.grade,
+      sector:s.sector||'',label:s.label||'',icon:'📈'
+    }));
+    const spikeSignals=allEntries.filter(s=>(s.score||0)>=65&&s.action!=='SELL').sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,10).map(s=>({
+      symbol:s.symbol,name:s.name,action:s.action,score:s.score,grade:s.grade,
+      sector:s.sector||'',label:s.label||'',icon:'⚡'
+    }));
+    const riskWarnings=allEntries.filter(s=>s.action==='SELL'||(s.risk||0)>=60).sort((a,b)=>(b.risk||0)-(a.risk||0)).slice(0,10).map(s=>({
+      symbol:s.symbol,name:s.name,action:s.action,score:s.score,grade:s.grade,
+      sector:s.sector||'',label:s.label||'',risk:s.risk||0,icon:'⚠️'
+    }));
+
+    const ranking={
+      updated_at:new Date().toISOString(),
+      top_picks:topPicks,
+      spike_signals:spikeSignals,
+      risk_warnings:riskWarnings,
+      meta:{total_analyzed:allEntries.length,note:"stocks/coins index.json 기반 자동 생성"}
+    };
+
+    const content=btoa(unescape(encodeURIComponent(JSON.stringify(ranking,null,2))));
+    await uploadFile('ranking/latest.json',content,'Auto-update ranking/latest.json');
+    toast(`ranking/latest.json 갱신 완료 (BUY ${topPicks.length}종목)`);
+  }catch(e){
+    console.error('ranking update failed:',e);
+  }
+}
+
+// ══════════════════════════════════════════════
+// TOOLS
+// ══════════════════════════════════════════════
+function openRepoInBrowser(){
+  if(!S.user)return;
+  window.open(`https://${S.user.login}.github.io/${REPO_NAME}/`,'_blank');
+}
+function openGitHubRepo(){
+  if(!S.user)return;
+  window.open(`https://github.com/${S.user.login}/${REPO_NAME}`,'_blank');
+}
+async function refreshAll(){
+  if(!S.user){toast('먼저 연결해주세요');return;}
+  await loadFiles();
+  toast('새로고침 완료');
+}
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+window.addEventListener('load',async()=>{
+  // 다크 모드 복원
+  if(Store.get('SX_DM_DARK')==='1') document.body.classList.add('dark');
+  // 토큰 복원
+  const saved=Store.get(TOKEN_KEY);
+  if(saved){
+    S.token=saved;
+    try{
+      const u=await ghFetch('/user');
+      S.user=u;
+      // repo 확인
+      await ghFetch(`/repos/${u.login}/${REPO_NAME}`);
+      showConnected();
+      await loadFiles();
+    }catch(e){
+      // 토큰 유효하지만 repo 없거나 만료
+      document.getElementById('tokenStatus').innerHTML=`<span style="color:var(--red)">${_esc(e.message)}</span>`;
+    }
+  }
+});
+
+// 모달 외부 클릭 닫기
+document.getElementById('uploadModal').addEventListener('click',function(e){
+  if(e.target===this)closeUploadModal();
+});
+document.getElementById('folderPickModal').addEventListener('click',function(e){
+  if(e.target===this)closeFolderPick();
+});
+
+// ══════════════════════════════════════════════
+// THRESHOLD PRESET SYSTEM
+// ══════════════════════════════════════════════
+const TH_STORAGE_KEY='SX_SMART_PRESETS';
+const TH_ACTIVE_KEY='SX_SMART_ACTIVE';
+
+// 기본 규칙 (하드코딩, 삭제 불가)
+const DEFAULT_RULES=[
+  {id:'score_drop',   label:'점수 임계값 이탈', severity:'hard', field:'buyThreshold',  defaultVal:0,   unit:'(TF별 buyTh)', desc:'score < buyTh'},
+  {id:'rsi_overbought',label:'RSI 과매수',      severity:'soft', field:'rsi_upper',     defaultVal:75,  unit:'', desc:'RSI > 값'},
+  {id:'rsi_oversold',  label:'RSI 급락구간',    severity:'soft', field:'rsi_lower',     defaultVal:25,  unit:'', desc:'RSI < 값'},
+  {id:'ma20_break',    label:'MA20 하향 이탈',  severity:'soft', field:'ma20_ratio',    defaultVal:0.97,unit:'×', desc:'price < MA20 × 값'},
+  {id:'ma60_break',    label:'MA60 하향 이탈',  severity:'hard', field:'ma60_ratio',    defaultVal:1.0, unit:'×', desc:'price < MA60 × 값'},
+  {id:'macd_dead_cross',label:'MACD 데드크로스',severity:'soft', field:'macd_bars',     defaultVal:5,   unit:'봉', desc:'histogram < 0 연속 N봉'},
+  {id:'volume_dead',   label:'거래량 실종',     severity:'hard', field:'vol_ratio_min', defaultVal:0.3, unit:'', desc:'vol_ratio < 값'},
+  {id:'adx_no_trend',  label:'추세 소멸',       severity:'soft', field:'adx_min',       defaultVal:15,  unit:'', desc:'ADX < 값'},
+  {id:'stoch_rsi_diverge',label:'Stoch/RSI 괴리',severity:'soft',field:'stoch_k_upper', defaultVal:90,  unit:'', desc:'Stoch %K > 값 && RSI < rsi_diverge_lower'},
+];
+// stoch_rsi_diverge에는 추가 필드 rsi_diverge_lower도 필요
+const EXTRA_FIELDS={
+  stoch_rsi_diverge:[{field:'rsi_diverge_lower',defaultVal:60,unit:'',label:'RSI <'}]
+};
+
+function getDefaultValues(){
+  const v={};
+  DEFAULT_RULES.forEach(r=>{v[r.field]=r.defaultVal;});
+  Object.values(EXTRA_FIELDS).forEach(arr=>arr.forEach(f=>{v[f.field]=f.defaultVal;}));
+  return v;
+}
+
+function loadPresets(){
+  try{return JSON.parse(localStorage.getItem(TH_STORAGE_KEY))||[];}catch(_){return[];}
+}
+function savePresets(list){localStorage.setItem(TH_STORAGE_KEY,JSON.stringify(list));}
+function getActivePreset(){return localStorage.getItem(TH_ACTIVE_KEY)||'default';}
+function setActivePreset(name){localStorage.setItem(TH_ACTIVE_KEY,name);}
+
+let _thCurrentValues={};
+let _thCurrentPreset='default';
+
+function openConfigMenu(){
+  document.getElementById('cfgMenu').style.display='flex';
+}
+function closeCfgMenu(){
+  document.getElementById('cfgMenu').style.display='none';
+}
+
+function openThresholdModal(){
+  if(!S.user){toast('먼저 GitHub을 연결해주세요');return;}
+  _thCurrentPreset=getActivePreset();
+  renderThPresets();
+  loadPresetValues(_thCurrentPreset);
+  renderThRules();
+  updateThDelBtn();
+  document.getElementById('thModal').style.display='flex';
+}
+function closeThModal(){
+  document.getElementById('thModal').style.display='none';
+}
+
+function renderThPresets(){
+  const row=document.getElementById('thPresetRow');
+  const presets=loadPresets();
+  let html=`<span class="th-preset-chip default${_thCurrentPreset==='default'?' active':''}" onclick="selectThPreset('default')">기본값</span>`;
+  presets.forEach(p=>{
+    html+=`<span class="th-preset-chip${_thCurrentPreset===p.name?' active':''}" onclick="selectThPreset('${_esc(p.name)}')">${_esc(p.name)}</span>`;
+  });
+  html+=`<span class="th-preset-add" onclick="addThPreset()">＋ 추가</span>`;
+  row.innerHTML=html;
+}
+
+function selectThPreset(name){
+  _thCurrentPreset=name;
+  setActivePreset(name);
+  loadPresetValues(name);
+  renderThRules();
+  renderThPresets();
+  updateThDelBtn();
+}
+
+function loadPresetValues(name){
+  if(name==='default'){
+    _thCurrentValues=getDefaultValues();
+  }else{
+    const presets=loadPresets();
+    const p=presets.find(x=>x.name===name);
+    if(p&&p.values){
+      _thCurrentValues={...getDefaultValues(),...p.values};
+    }else{
+      _thCurrentValues=getDefaultValues();
+    }
+  }
+}
+
+function renderThRules(){
+  const body=document.getElementById('thBody');
+  const isDefault=_thCurrentPreset==='default';
+  let html='';
+  DEFAULT_RULES.forEach(r=>{
+    const val=_thCurrentValues[r.field]??r.defaultVal;
+    const step=r.field==='ma20_ratio'||r.field==='ma60_ratio'||r.field==='vol_ratio_min'?'0.01':'1';
+    html+=`<div class="th-rule">
+      <div class="th-rule-head">
+        <span class="th-rule-label">${r.label}</span>
+        <span class="th-rule-sev ${r.severity}">${r.severity}</span>
+      </div>
+      <div class="th-rule-desc">${r.desc}</div>
+      <div class="th-rule-input">
+        <label>${r.field.replace(/_/g,' ')}</label>
+        <input type="number" step="${step}" value="${val}" data-field="${r.field}" ${isDefault?'disabled':''} onchange="onThChange(this)"/>
+        <span class="th-unit">${r.unit}</span>
+      </div>`;
+    // 추가 필드
+    if(EXTRA_FIELDS[r.id]){
+      EXTRA_FIELDS[r.id].forEach(ef=>{
+        const ev=_thCurrentValues[ef.field]??ef.defaultVal;
+        html+=`<div class="th-rule-input" style="margin-top:4px;">
+          <label>${ef.label}</label>
+          <input type="number" step="1" value="${ev}" data-field="${ef.field}" ${isDefault?'disabled':''} onchange="onThChange(this)"/>
+          <span class="th-unit">${ef.unit}</span>
+        </div>`;
+      });
+    }
+    html+=`</div>`;
+  });
+  body.innerHTML=html;
+}
+
+function onThChange(input){
+  const field=input.dataset.field;
+  _thCurrentValues[field]=parseFloat(input.value);
+  // 커스텀 프리셋이면 로컬 자동 저장
+  if(_thCurrentPreset!=='default'){
+    const presets=loadPresets();
+    const p=presets.find(x=>x.name===_thCurrentPreset);
+    if(p){p.values={..._thCurrentValues};savePresets(presets);}
+  }
+}
+
+function addThPreset(){
+  const name=prompt('프리셋 이름을 입력하세요:');
+  if(!name||!name.trim())return;
+  const trimmed=name.trim();
+  const presets=loadPresets();
+  if(presets.find(x=>x.name===trimmed)){toast('이미 존재하는 이름입니다');return;}
+  presets.push({name:trimmed,values:{...getDefaultValues()}});
+  savePresets(presets);
+  _thCurrentPreset=trimmed;
+  setActivePreset(trimmed);
+  loadPresetValues(trimmed);
+  renderThPresets();
+  renderThRules();
+  updateThDelBtn();
+  toast(`프리셋 "${trimmed}" 추가됨`);
+}
+
+function deleteThPreset(){
+  if(_thCurrentPreset==='default'){toast('기본값은 삭제할 수 없습니다');return;}
+  if(!confirm(`"${_thCurrentPreset}" 프리셋을 삭제할까요?`))return;
+  let presets=loadPresets();
+  presets=presets.filter(x=>x.name!==_thCurrentPreset);
+  savePresets(presets);
+  _thCurrentPreset='default';
+  setActivePreset('default');
+  loadPresetValues('default');
+  renderThPresets();
+  renderThRules();
+  updateThDelBtn();
+  toast('프리셋 삭제됨');
+}
+
+function updateThDelBtn(){
+  document.getElementById('thDelBtn').style.display=_thCurrentPreset==='default'?'none':'block';
+}
+
+// ── GitHub 적용: sx_smart_rules.json 수정 배포 ──
+async function applyThPreset(){
+  if(!S.user){toast('GitHub 연결 필요');return;}
+  if(!confirm(`"${_thCurrentPreset}" 프리셋을 GitHub에 적용할까요?\nconfig/sx_smart_rules.json이 수정됩니다.`))return;
+
+  const btn=document.querySelector('.th-btn-apply');
+  btn.textContent='적용 중...';btn.disabled=true;
+
+  try{
+    const v=_thCurrentValues;
+    const payload={
+      version:'1.0',
+      preset:_thCurrentPreset,
+      updated_at:new Date().toISOString(),
+      thresholds:{
+        D:{buyTh:62,sellTh:38},W:{buyTh:58,sellTh:35},M:{buyTh:55,sellTh:32}
+      },
+      fail_conditions:[
+        {id:'score_drop',   label:'점수 임계값 이탈', severity:'hard', check:'score < buyTh'},
+        {id:'rsi_overbought',label:'RSI 과매수',      severity:'soft', value:v.rsi_upper},
+        {id:'rsi_oversold',  label:'RSI 급락구간',    severity:'soft', value:v.rsi_lower},
+        {id:'ma20_break',    label:'MA20 하향 이탈',  severity:'soft', ratio:v.ma20_ratio},
+        {id:'ma60_break',    label:'MA60 하향 이탈',  severity:'hard', ratio:v.ma60_ratio},
+        {id:'macd_dead_cross',label:'MACD 데드크로스',severity:'soft', bars:v.macd_bars},
+        {id:'volume_dead',   label:'거래량 실종',     severity:'hard', ratio:v.vol_ratio_min},
+        {id:'adx_no_trend',  label:'추세 소멸',       severity:'soft', value:v.adx_min},
+        {id:'stoch_rsi_diverge',label:'Stoch/RSI 괴리',severity:'soft', stoch_upper:v.stoch_k_upper, rsi_lower:v.rsi_diverge_lower}
+      ],
+      action_rules:{hard_any:'SELL',soft_count:{'0':'BUY','1':'BUY','2':'HOLD','3':'SELL'}}
+    };
+
+    const content=btoa(unescape(encodeURIComponent(JSON.stringify(payload,null,2))));
+    await uploadFile('config/sx_smart_rules.json',content,`Update smart rules: ${_thCurrentPreset}`);
+    toast(`✅ "${_thCurrentPreset}" 프리셋이 GitHub에 적용됨`);
+    closeThModal();
+  }catch(e){
+    console.error('applyThPreset failed:',e);
+    toast('GitHub 적용 실패: '+e.message);
+  }finally{
+    btn.textContent='GitHub 적용';btn.disabled=false;
+  }
+}
+</script>
+</body>
+</html>
