@@ -153,6 +153,12 @@ select option{background:var(--surface2);color:var(--text);}
         <div class="dropzone-icon">📁</div>
         <div class="dropzone-text" style="color:var(--orange);">클릭하여 폴더 통째로 선택</div>
       </div>
+      <!-- 배포 폴더 경로 (단일선택 파일 공통 접두사) -->
+      <div style="margin-top:10px;">
+        <div class="card-label" style="margin-bottom:5px;">📂 배포 폴더 <span style="color:var(--muted);letter-spacing:0;text-transform:none;font-size:9px;">— 비우면 루트</span></div>
+        <input type="text" id="folderPrefix" oninput="applyFolderPrefix()" placeholder="비우면 루트 · 예: .github/workflows/  offline/" autocapitalize="off" autocomplete="off" spellcheck="false" style="font-size:13px !important;"/>
+        <div id="folderPrefixHint" style="font-family:var(--mono);font-size:10px;color:var(--blue);margin-top:5px;min-height:12px;"></div>
+      </div>
       <div id="fileControls" style="display:none;">
         <div class="btn-row">
           <button class="btn sm" style="flex:1;color:var(--accent);background:transparent;border:1px solid var(--accent);" onclick="document.getElementById('fileInput').click()">+ 파일 추가</button>
@@ -526,8 +532,10 @@ function shouldIgnore(path){
 }
 
 function handleFiles(input){
+  const prefix=_normPrefix(document.getElementById('folderPrefix')?document.getElementById('folderPrefix').value:'');
   Array.from(input.files).forEach(f=>{
-    const entry={file:f,name:f.name,path:f.name}; // path = 배포경로 (루트)
+    const p=prefix?prefix+'/'+f.name:f.name;
+    const entry={file:f,name:f.name,path:p,base:f.name,root:true}; // root=true → 배포폴더 접두사 적용 대상
     const idx=S.files.findIndex(x=>x.path===entry.path);
     if(idx>=0)S.files[idx]=entry;else S.files.push(entry);
   });
@@ -558,12 +566,25 @@ function handleFolderFiles(input){
 }
 
 function removeFile(idx){S.files.splice(idx,1);renderFileList();}
+// 배포 폴더 접두사 정규화 (선행/후행 슬래시·이중슬래시·역슬래시 정리)
+function _normPrefix(p){return (p||'').trim().replace(/\\/g,'/').replace(/^\/+|\/+$/g,'').replace(/\/\/+/g,'/');}
+// 폴더 입력란 변경 시: 단일선택(root) 파일 경로를 접두사+파일명으로 재설정. 폴더업로드 파일은 구조 보존.
+function applyFolderPrefix(){
+  const el=document.getElementById('folderPrefix');
+  const raw=el?el.value:'';
+  const prefix=_normPrefix(raw);
+  S.files.forEach(e=>{ if(e.root){ e.base=e.base||e.name; e.path=prefix?prefix+'/'+e.base:e.base; e.name=e.base; } });
+  const hint=document.getElementById('folderPrefixHint');
+  if(hint) hint.textContent = prefix ? ('→ '+prefix+'/ 에 배포') : (raw.trim()?'→ 루트에 배포':'');
+  renderFileList();
+}
 function updateFilePath(idx,path){
   path=path.trim();
   if(!path){toast('경로를 입력해주세요');renderFileList();return;}
   // 선행/후행 슬래시, 이중 슬래시 정리
   path=path.replace(/^\/+|\/+$/g,'').replace(/\/\/+/g,'/');
   S.files[idx].path=path;S.files[idx].name=path.split('/').pop();
+  S.files[idx].root=false; // 수동 편집 → 폴더 접두사 재적용 대상에서 제외
   renderFileList();
 }
 function _esc(s){return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
