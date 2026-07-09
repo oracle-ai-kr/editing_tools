@@ -132,7 +132,9 @@ select option{background:var(--surface2);color:var(--text);}
         <div class="mode-btn inactive" id="modeNew" onclick="setRepoMode('new')">새로 만들기</div>
       </div>
       <div id="repoExisting">
-        <select id="repoSelect"><option value="">저장소 선택...</option></select>
+        <select id="repoSelect" onchange="loadBranchesForRepo()"><option value="">저장소 선택...</option></select>
+        <select id="branchSelect" onchange="updateDeployLabel()" style="margin-top:8px;"><option value="">← 저장소 먼저 선택</option></select>
+        <div id="branchHint" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:5px;line-height:1.6;">배포 대상 브랜치 · UI 수정은 main · 레시피 검증본은 recipe-lab(→PR→머지)</div>
       </div>
       <div id="repoNew" style="display:none;">
         <input id="newRepoName" placeholder="새 저장소 이름 (예: signal-lab)"/>
@@ -509,6 +511,40 @@ function setRepoMode(mode){
   document.getElementById('modeNew').className=`mode-btn ${mode==='new'?'active':'inactive'}`;
   document.getElementById('repoExisting').style.display=mode==='existing'?'block':'none';
   document.getElementById('repoNew').style.display=mode==='new'?'block':'none';
+  updateDeployLabel(); // [FIX#10]
+}
+// [FIX#10] 배포 버튼에 대상 브랜치 명시 — 기본 브랜치면 평소 라벨, 아니면 "N 브랜치에 커밋"
+function updateDeployLabel(){
+  const btn=document.getElementById('btnDeploy'); if(!btn) return;
+  const v=_selectedBranch();
+  const def=_defaultBranchOf(document.getElementById('repoSelect').value);
+  btn.textContent=(v && v!==def)?('🚀 '+v+' 브랜치에 커밋'):'🚀 GitHub Pages 배포';
+}
+// [FIX#10] 선택된 대상 브랜치 (기존 저장소 모드만)
+function _selectedBranch(){
+  if(S.repoMode!=='existing') return '';
+  const bs=document.getElementById('branchSelect');
+  return bs?bs.value:'';
+}
+function _defaultBranchOf(repo){ return (S.repos.find(r=>r.name===repo)||{}).default_branch||'main'; }
+// [FIX#10] 저장소 선택 시 실제 브랜치 목록 로드(웹처럼) — 기본 브랜치 자동 선택
+async function loadBranchesForRepo(){
+  const bs=document.getElementById('branchSelect'); if(!bs) return;
+  const repo=document.getElementById('repoSelect').value;
+  if(!repo){ bs.innerHTML='<option value="">← 저장소 먼저 선택</option>'; updateDeployLabel(); return; }
+  bs.innerHTML='<option value="">브랜치 불러오는 중...</option>';
+  const def=_defaultBranchOf(repo);
+  try{
+    const branches=await ghFetch(`/repos/${S.user.login}/${repo}/branches?per_page=100`);
+    if(Array.isArray(branches) && branches.length){
+      bs.innerHTML=branches.map(b=>`<option value="${b.name}"${b.name===def?' selected':''}>${b.name}${b.name===def?' (default)':''}</option>`).join('');
+    }else{
+      bs.innerHTML=`<option value="${def}" selected>${def} (default)</option>`;
+    }
+  }catch(_){
+    bs.innerHTML=`<option value="${def}" selected>${def}</option>`;
+  }
+  updateDeployLabel();
 }
 
 // ── FILES ──────────────────────────────────────
@@ -719,14 +755,15 @@ async function readBase64(file){
     r.readAsDataURL(file);
   });
 }
-// [FIX#5] 파일 경로 URL 인코딩 (슬래시는 유지)
-async function uploadFile(repo,login,name,content,msg){
+// [FIX#5] 파일 경로 URL 인코딩 (슬래시는 유지) · [FIX#10] branch 지원(SHA는 해당 브랜치 기준·PUT body에 branch)
+async function uploadFile(repo,login,name,content,msg,branch){
   const encoded=name.split('/').map(s=>encodeURIComponent(s)).join('/');
+  const refQ=branch?('?ref='+encodeURIComponent(branch)):'';
   let sha;
-  try{const ex=await ghFetch(`/repos/${login}/${repo}/contents/${encoded}`);sha=ex.sha;}catch(_){sha=null;}
+  try{const ex=await ghFetch(`/repos/${login}/${repo}/contents/${encoded}${refQ}`);sha=ex.sha;}catch(_){sha=null;}
   await ghFetch(`/repos/${login}/${repo}/contents/${encoded}`,{
     method:'PUT',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({message:msg,content,...(sha?{sha}:{})}),
+    body:JSON.stringify({message:msg,content,...(sha?{sha}:{}),...(branch?{branch}:{})}),
   });
 }
 
@@ -776,6 +813,13 @@ async function deploy(){
       :document.getElementById('repoSelect').value;
     if(!repoName){setStatus('저장소를 선택하거나 이름을 입력해주세요.','err');btn.disabled=false;return;}
 
+    // [FIX#10] 대상 브랜치 (드롭다운·기존 저장소만) + 기본 브랜치 아니면 배포 확인
+    const targetBranch=_selectedBranch();
+    const _defB=_defaultBranchOf(repoName);
+    if(targetBranch && targetBranch!==_defB){
+      if(!confirm(`'${targetBranch}' 브랜치에 배포합니다. (기본 '${_defB}' 아님)\n\n계속할까요?`)){btn.disabled=false;return;}
+    }
+
     // 새 레포 생성
     if(S.repoMode==='new'){
       setProgress('저장소 생성 중...',0,0);
@@ -797,7 +841,7 @@ async function deploy(){
         if(hasSubdirFiles){
           // 하위 폴더 파일이 포함된 경우 재귀 조회
           const fetchAllPaths=async(dirPath)=>{
-            const url=dirPath?`/repos/${S.user.login}/${repoName}/contents/${dirPath}`:`/repos/${S.user.login}/${repoName}/contents/`;
+            const url=(dirPath?`/repos/${S.user.login}/${repoName}/contents/${dirPath}`:`/repos/${S.user.login}/${repoName}/contents/`)+(targetBranch?`?ref=${encodeURIComponent(targetBranch)}`:'');
             const items=await ghFetch(url);
             if(!Array.isArray(items))return [];
             let paths=[];
@@ -813,7 +857,7 @@ async function deploy(){
           };
           cachedRepoFiles=await fetchAllPaths('');
         }else{
-          const repoContents=await ghFetch(`/repos/${S.user.login}/${repoName}/contents/`);
+          const repoContents=await ghFetch(`/repos/${S.user.login}/${repoName}/contents/`+(targetBranch?`?ref=${encodeURIComponent(targetBranch)}`:''));
           if(Array.isArray(repoContents)) cachedRepoFiles=repoContents.filter(c=>c.type==='file').map(c=>c.name);
         }
       }catch(_){cachedRepoFiles=null;}
@@ -858,7 +902,7 @@ async function deploy(){
       try{
         const content=await readBase64(f.file);
         await uploadFile(repoName,S.user.login,deployPath,content,
-          f.isHub?'Update hub index.html':`Deploy ${deployPath}`);
+          f.isHub?'Update hub index.html':`Deploy ${deployPath}`, targetBranch);
         uploaded.push(deployPath);
       }catch(e){
         failed.push({name:deployPath,error:e.message});
