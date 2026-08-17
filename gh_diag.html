@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#080c12">
+<title>GH API 진단판</title>
+<!--
+  ══════════════════════════════════════════════════════════════
+   GitHub API 연결 진단판 (단독 페이지 · 디플로이어 무변경)
+   목적: `Failed to fetch` 가 어느 단계에서 나는지 화면에서 가른다.
+   ★모바일에 콘솔이 없어서 만든 것이다 — PC 없이 원인을 좁힌다.
+
+   설계 원칙
+     · 헤더를 **한 개씩 더해가며** 부른다 → 프리플라이트 유발 지점이 드러난다
+     · 각 단계는 독립 · 앞 단계가 실패해도 다음을 계속 시도한다
+     · 에러는 **원문 그대로** 보여준다(가공하면 단서가 사라진다)
+     · 토큰은 localStorage에 **저장하지 않는다**(진단용 1회성)
+     · 응답 본문은 앞 200자만 — 토큰이 에코될 여지를 줄인다
+   ══════════════════════════════════════════════════════════════
+-->
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#080c12; --card:#0e141c; --line:#1c2530;
+  --t1:#e6edf3; --t2:#9aa7b4; --t3:#5c6b7a;
+  --ok:#3fb950; --err:#f85149; --warn:#d29922; --pink:#ff7ab6;
+}
+body{margin:0;background:var(--bg);color:var(--t1);
+  font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;padding:14px 12px 40px}
+h1{font-size:15px;letter-spacing:.08em;margin:0 0 4px;color:var(--pink)}
+.sub{font-size:11px;color:var(--t3);margin:0 0 14px;line-height:1.5}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+label{display:block;font-size:10px;letter-spacing:.1em;color:var(--t3);margin-bottom:6px}
+input{width:100%;background:#0a0f16;border:1px solid var(--line);border-radius:8px;
+  color:var(--t1);padding:11px 12px;font:12px ui-monospace,monospace}
+button{width:100%;margin-top:10px;background:var(--pink);color:#12060d;border:0;
+  border-radius:8px;padding:13px;font-size:14px;font-weight:800;letter-spacing:.03em}
+button:disabled{opacity:.5}
+button.alt{background:transparent;color:var(--t2);border:1px solid var(--line);font-weight:600}
+.step{border-top:1px solid var(--line);padding:10px 0 2px}
+.step:first-child{border-top:0}
+.sh{display:flex;align-items:flex-start;gap:8px;font-size:12px}
+.ic{flex:0 0 18px;text-align:center;font-size:13px}
+.sn{flex:1}
+.st{font-weight:700}
+.sd{font-size:10.5px;color:var(--t3);line-height:1.5;margin-top:2px}
+.res{margin-top:6px;padding:8px 9px;border-radius:6px;background:#0a0f16;
+  font-size:10.5px;line-height:1.55;color:var(--t2);word-break:break-all;white-space:pre-wrap}
+.res.ok{border-left:2px solid var(--ok)}
+.res.err{border-left:2px solid var(--err);color:#ffb3ae}
+.verdict{margin-top:12px;padding:12px;border-radius:8px;border:1px solid var(--line);
+  background:#0a0f16;font-size:12px;line-height:1.7}
+.verdict b{color:var(--pink)}
+.hint{font-size:10.5px;color:var(--t3);line-height:1.6;margin-top:8px}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid var(--t3);
+  border-top-color:transparent;border-radius:50%;animation:s .7s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<h1>● GH API 진단판</h1>
+<p class="sub">
+  <code>Failed to fetch</code> 가 <b>어느 단계</b>에서 나는지 가릅니다.<br>
+  헤더를 하나씩 더해가며 부르므로, 처음 실패하는 지점이 원인입니다.<br>
+  ⚠토큰은 저장하지 않습니다(1회성).
+</p>
+
+<div class="card">
+  <label>GITHUB TOKEN (선택 — 없으면 1·2단계만)</label>
+  <input id="tok" type="password" placeholder="ghp_... 또는 비워두기" autocomplete="off">
+  <button id="run">진단 시작</button>
+  <button id="copy" class="alt">결과 복사</button>
+</div>
+
+<div class="card" id="out"></div>
+
+<script>
+// ── 단계 정의 ─────────────────────────────────────────────
+//   헤더를 **누적**해 간다. 프리플라이트는 '단순 헤더가 아닌 것'이 하나라도
+//   있으면 발생하므로, 어느 헤더에서 처음 깨지는지가 곧 원인이다.
+//   · 1단계: 헤더 0개  → 프리플라이트 없음(단순 요청)
+//   · 2단계: Accept만  → Accept는 단순 헤더라 여전히 프리플라이트 없음
+//   · 3단계: + X-GitHub-Api-Version → ★프리플라이트 발생(커스텀 헤더)
+//   · 4단계: + Authorization        → ★프리플라이트 + 인증
+//   · 5단계: /user (실제 디플로이어 첫 호출과 동일)
+const API='https://api.github.com';
+function steps(tok){
+  const H_ACC={'Accept':'application/vnd.github+json'};
+  const H_VER={...H_ACC,'X-GitHub-Api-Version':'2022-11-28'};
+  const H_ALL=tok?{...H_VER,'Authorization':`Bearer ${tok}`}:null;
+  const s=[
+    {n:'1. /zen · 헤더 없음',        url:'/zen',        h:null,   d:'프리플라이트 없는 가장 단순한 요청. 여기서 실패하면 네트워크·차단기 문제.'},
+    {n:'2. /zen · Accept',           url:'/zen',        h:H_ACC,  d:'Accept는 단순 헤더 → 아직 프리플라이트 없음.'},
+    {n:'3. /zen · +ApiVersion',      url:'/zen',        h:H_VER,  d:'★커스텀 헤더 추가 → OPTIONS 프리플라이트 발생. 여기서만 실패하면 프리플라이트가 막힌 것.'},
+    {n:'4. /rate_limit · 무인증',    url:'/rate_limit', h:H_VER,  d:'IP 기준 한도 확인(60/시간). remaining이 0이면 IP 한도 소진.'},
+  ];
+  if(H_ALL){
+    s.push({n:'5. /rate_limit · +Auth', url:'/rate_limit', h:H_ALL,
+      d:'★토큰 기준 한도(5,000/시간). core.remaining이 0이면 **토큰 한도 소진**이 원인.'});
+    s.push({n:'6. /user · 전체 헤더', url:'/user', h:H_ALL,
+      d:'디플로이어 첫 호출과 동일. 5는 되고 6만 실패하면 토큰 권한(scope) 문제.'});
+    s.push({n:'7. /user/repos · 1페이지', url:'/user/repos?per_page=1&affiliation=owner', h:H_ALL,
+      d:'저장소 조회 권한 확인. repo 스코프가 없으면 여기서 갈린다.'});
+  } else {
+    s.push({n:'5~7. 토큰 단계', url:null, h:null, d:'토큰을 입력하면 인증 단계까지 검사합니다.'});
+  }
+  return s;
+}
+
+const LOG=[];
+function row(i,st){
+  return `<div class="step" id="s${i}">
+    <div class="sh"><div class="ic" id="i${i}">·</div>
+      <div class="sn"><div class="st">${st.n}</div><div class="sd">${st.d}</div>
+      <div id="r${i}"></div></div></div></div>`;
+}
+
+async function one(i,st){
+  const ic=document.getElementById('i'+i), rs=document.getElementById('r'+i);
+  if(!st.url){ ic.textContent='—'; return {skip:true}; }
+  ic.innerHTML='<span class="spin"></span>';
+  const t0=Date.now();
+  try{
+    const res=await fetch(API+st.url, st.h?{headers:st.h}:undefined);
+    const ms=Date.now()-t0;
+    let body=''; try{ body=(await res.text()).slice(0,200); }catch(_){ body='(본문 읽기 실패)'; }
+    const rl=res.headers.get('x-ratelimit-remaining');
+    const ok=res.ok;
+    ic.textContent=ok?'✓':'✗';
+    ic.style.color=ok?'var(--ok)':'var(--err)';
+    rs.innerHTML=`<div class="res ${ok?'ok':'err'}">HTTP ${res.status} · ${ms}ms`
+      +(rl!=null?` · ratelimit-remaining: ${rl}`:'')
+      +`\n${body}</div>`;
+    LOG.push(`${st.n} → HTTP ${res.status} ${ms}ms rl=${rl} :: ${body.replace(/\s+/g,' ').slice(0,120)}`);
+    return {status:res.status, ok, rl:rl!=null?+rl:null, body};
+  }catch(e){
+    const ms=Date.now()-t0;
+    ic.textContent='✗'; ic.style.color='var(--err)';
+    //  ★에러는 원문 그대로 — 가공하면 단서가 사라진다
+    rs.innerHTML=`<div class="res err">${e.name}: ${e.message} · ${ms}ms
+\n⚠응답이 오지 않았습니다(HTTP 상태 없음).</div>`;
+    LOG.push(`${st.n} → THROW ${e.name}: ${e.message} (${ms}ms)`);
+    return {threw:true, err:e.message};
+  }
+}
+
+//  ── 판정 ─────────────────────────────────────────────
+//   ⚠추측을 단정으로 쓰지 않는다. 갈린 지점이 가리키는 것만 적는다.
+function verdict(r){
+  const t=(i)=>r[i]&&r[i].threw;
+  const okk=(i)=>r[i]&&r[i].ok;
+  let h='';
+  if(t(0)){
+    h=`<b>1단계부터 실패</b> — 프리플라이트조차 안 가는 상태입니다.<br>
+       ⇒ <b>차단기·확장·VPN·사설 DNS</b> 또는 이 기기의 네트워크 정책을 보십시오.
+       주소창으로 <code>api.github.com/zen</code>이 열리는데 여기서 실패하면,
+       <b>페이지가 보내는 요청만</b> 막히는 것입니다(차단기의 전형적 동작).`;
+  } else if(okk(0)&&okk(1)&&t(2)){
+    h=`<b>3단계에서만 실패</b> — 커스텀 헤더가 붙자 깨졌습니다.<br>
+       ⇒ <b>OPTIONS 프리플라이트가 막히고 있습니다.</b> 중간 프록시·보안 소프트웨어가
+       OPTIONS를 떨어뜨리는 경우입니다.`;
+  } else if(okk(2)&&r[4]&&r[4].rl===0){
+    h=`<b>토큰 한도 소진</b> — 5단계 <code>ratelimit-remaining: 0</code>.<br>
+       ⇒ 응답의 reset 시각까지 기다리면 풀립니다. 코드 문제가 아닙니다.`;
+  } else if(okk(2)&&r[5]&&!r[5].ok&&r[5].status===401){
+    h=`<b>토큰이 무효/만료</b> — 6단계 HTTP 401.<br>⇒ 새 토큰을 발급하십시오.`;
+  } else if(okk(2)&&r[5]&&!r[5].ok&&r[5].status===403){
+    h=`<b>권한 또는 2차 제한</b> — 6단계 HTTP 403. 위 본문 메시지를 확인하십시오.`;
+  } else if(okk(5)&&r[6]&&!r[6].ok){
+    h=`<b>저장소 권한 부족</b> — 7단계 실패. 토큰에 <code>repo</code> 스코프가 필요합니다.`;
+  } else if(okk(5)&&okk(6)){
+    h=`<b>전 단계 통과</b> — 지금 이 시점에는 API가 정상입니다.<br>
+       ⚠디플로이어에서만 실패한다면 <b>그 페이지의 캐시</b>가 의심됩니다 —
+       디플로이어를 열고 <b>새로고침(당겨서)</b> 또는 시크릿 창에서 시도해보십시오.`;
+  } else {
+    h=`<b>단정할 수 없습니다.</b> 위 단계별 결과를 그대로 보고 판단하십시오 —
+       처음 <code>✗</code>가 뜬 단계가 원인 지점입니다.`;
+  }
+  return `<div class="verdict">${h}
+    <div class="hint">⚠이 판정은 <b>이번 호출 결과만</b>으로 말합니다. 시간이 지나면 달라질 수 있습니다.</div></div>`;
+}
+
+document.getElementById('run').onclick=async()=>{
+  const btn=document.getElementById('run'); btn.disabled=true; btn.textContent='진단 중...';
+  LOG.length=0;
+  const tok=document.getElementById('tok').value.trim();
+  const ST=steps(tok);
+  const out=document.getElementById('out');
+  out.innerHTML=ST.map((s,i)=>row(i,s)).join('');
+  const res=[];
+  for(let i=0;i<ST.length;i++) res.push(await one(i,ST[i]));
+  out.insertAdjacentHTML('beforeend', verdict(res));
+  LOG.unshift('GH 진단 '+new Date().toISOString()+' · 토큰 '+(tok?'있음':'없음')
+    +' · UA '+navigator.userAgent.slice(0,90));
+  btn.disabled=false; btn.textContent='다시 진단';
+};
+
+document.getElementById('copy').onclick=()=>{
+  if(!LOG.length){ alert('먼저 진단을 실행하십시오.'); return; }
+  const txt=LOG.join('\n');
+  const done=()=>alert('복사했습니다 ('+LOG.length+'줄)');
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(done).catch(()=>{
+      const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta);
+      ta.select(); try{document.execCommand('copy'); done();}catch(_){alert('복사 실패');}
+      document.body.removeChild(ta);
+    });
+  } else {
+    const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta);
+    ta.select(); try{document.execCommand('copy'); done();}catch(_){alert('복사 실패');}
+    document.body.removeChild(ta);
+  }
+};
+</script>
+</body>
+</html>
