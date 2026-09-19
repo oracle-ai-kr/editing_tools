@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>📊 시장평균 PER 빌더 (KOSIS)</title>
+<!-- [S1646] 코스피·코스닥 두 통계표를 한 market_per.json으로 합친다(사용자 요청 2026-09-20).
+     구판은 파일 하나만 받아 통계표ID를 코스피로 박아 두었고, 코스닥 파일을 넣으면 코스닥 대형·중형·소형주가
+     코스피 칸 이름(대형주·중형주·소형주)으로 나가 스크리너가 코스피 기준으로 오독할 수 있었다.
+     새 판: 칸 2개(코스피·코스닥) · 메타정보 시트의 통계표ID로 시장을 가려 맞는 칸에 넣는다 ·
+     결과 JSON은 categories=코스피(스크리너가 읽는 자리 그대로) + kosdaq.categories=코스닥(이름 충돌 없음) ·
+     칸마다 n(평균에 쓴 달 수 · "-" 제외)과 latestMonth(latest 값의 달)를 더한다. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
@@ -24,12 +30,14 @@ h1{font-size:18px;margin:0 0 4px}
 .step{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700}
 
 /* 업로드 카드 */
+.upload-stack{display:flex;flex-direction:column;gap:8px}
 .upload-card{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .2s;position:relative}
 .upload-card:hover{border-color:var(--accent);background:var(--surface2)}
 .upload-card.loaded{border-style:solid;border-color:var(--buy);background:rgba(16,185,129,.05)}
 .upload-card.error{border-color:var(--sell);background:rgba(239,68,68,.05)}
 .upload-icon{font-size:26px;flex-shrink:0}
 .upload-info{flex:1;min-width:0;pointer-events:none}
+.upload-market{font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:1px}
 .upload-name{font-size:13px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .upload-status{font-size:11px;color:var(--text3)}
 .upload-card.loaded .upload-status{color:var(--buy)}
@@ -46,7 +54,11 @@ h1{font-size:18px;margin:0 0 4px}
 .help ol{margin:4px 0 0 18px;padding:0}
 .help li{margin-bottom:2px}
 
-/* 미리보기 테이블 */
+/* 미리보기 */
+.mk-block + .mk-block{margin-top:14px}
+.mk-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px}
+.mk-head b{font-size:13px;color:var(--text)}
+.mk-head span{color:var(--text3);font-size:11px}
 .preview-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
 .preview-table th{background:var(--surface2);color:var(--text2);padding:6px 8px;text-align:left;font-weight:600;font-size:11px;border-bottom:1px solid var(--line)}
 .preview-table td{padding:6px 8px;border-bottom:1px solid var(--line)}
@@ -54,12 +66,20 @@ h1{font-size:18px;margin:0 0 4px}
 .preview-table .cat{font-weight:600;color:var(--text)}
 .preview-table .num{text-align:right;color:var(--accent2);font-variant-numeric:tabular-nums}
 .preview-table .num-latest{color:var(--warn)}
+.preview-table .months{text-align:right;color:var(--text3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.preview-table tr.sparse td{color:var(--warn)}
+.preview-table tr.sparse .cat::after{content:' ⚠';font-weight:400}
 
 /* 메타 정보 박스 */
 .meta-box{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:8px;font-size:11px;color:var(--text2)}
-.meta-box .meta-row{display:flex;justify-content:space-between;padding:2px 0}
-.meta-box .meta-row span:first-child{color:var(--text3)}
-.meta-box .meta-row span:last-child{color:var(--text);font-weight:500}
+.meta-box .meta-row{display:flex;justify-content:space-between;gap:10px;padding:2px 0}
+.meta-box .meta-row span:first-child{color:var(--text3);flex-shrink:0}
+.meta-box .meta-row span:last-child{color:var(--text);font-weight:500;text-align:right}
+
+/* 안내(주의) */
+.notice{background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--text2);line-height:1.6;margin-top:10px}
+.notice b{color:var(--warn)}
+.notice ul{margin:2px 0 0 16px;padding:0}
 
 /* 다운로드 버튼 */
 .btn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s}
@@ -67,6 +87,7 @@ h1{font-size:18px;margin:0 0 4px}
 .btn:disabled{background:var(--surface2);color:var(--text3);cursor:not-allowed}
 .btn.downloaded{background:rgba(16,185,129,.15);border:1px solid var(--buy);color:var(--buy)}
 .btn.downloaded::before{content:'✓ '}
+.dl-note{font-size:11px;color:var(--text3);margin-top:6px;min-height:1em}
 
 /* 로그 */
 .log{background:#0d172b;border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:10px;max-height:160px;overflow-y:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5}
@@ -84,29 +105,43 @@ h1{font-size:18px;margin:0 0 4px}
 <body>
 
 <h1>📊 시장평균 PER 빌더</h1>
-<div class="sub">KOSIS 엑셀 → <code>market_per.json</code> 자동 변환</div>
+<div class="sub">KOSIS 엑셀(코스피·코스닥) → <code>market_per.json</code> 자동 변환</div>
 
 <!-- ─── 1단계: 엑셀 업로드 ─── -->
 <div class="section">
   <div class="sec-title"><span class="step">1</span>KOSIS 엑셀 업로드</div>
 
-  <label class="upload-card" id="uploadCard" for="fileInput">
-    <div class="upload-icon">📈</div>
-    <div class="upload-info">
-      <div class="upload-name" id="uploadName">파일 선택</div>
-      <div class="upload-status" id="uploadStatus">코스피 PER 통계표 (xlsx)</div>
-    </div>
-    <button type="button" class="reset-btn" id="resetBtn">✕</button>
-    <input type="file" id="fileInput" accept=".xlsx,.xls">
-  </label>
+  <div class="upload-stack">
+    <label class="upload-card" id="card-KOSPI" for="file-KOSPI">
+      <div class="upload-icon">📈</div>
+      <div class="upload-info">
+        <div class="upload-market">코스피</div>
+        <div class="upload-name" id="name-KOSPI">파일 선택</div>
+        <div class="upload-status" id="status-KOSPI">코스피 PER 통계표 (xlsx) · 필수</div>
+      </div>
+      <button type="button" class="reset-btn" id="reset-KOSPI" aria-label="코스피 파일 지우기">✕</button>
+      <input type="file" id="file-KOSPI" accept=".xlsx,.xls">
+    </label>
+
+    <label class="upload-card" id="card-KOSDAQ" for="file-KOSDAQ">
+      <div class="upload-icon">📊</div>
+      <div class="upload-info">
+        <div class="upload-market">코스닥</div>
+        <div class="upload-name" id="name-KOSDAQ">파일 선택</div>
+        <div class="upload-status" id="status-KOSDAQ">코스닥 PER 통계표 (xlsx) · 선택</div>
+      </div>
+      <button type="button" class="reset-btn" id="reset-KOSDAQ" aria-label="코스닥 파일 지우기">✕</button>
+      <input type="file" id="file-KOSDAQ" accept=".xlsx,.xls">
+    </label>
+  </div>
 
   <div class="help">
-    <b>📥 KOSIS 다운로드 절차</b>
+    <b>📥 KOSIS 다운로드 절차</b> (코스피·코스닥 각각)
     <ol>
-      <li>kosis.kr → 통계표 <code>DT_343_2010_S0033</code> (코스피 주가이익비율)</li>
+      <li>kosis.kr → 통계표 코스피 <code>DT_343_2010_S0033</code> · 코스닥 <code>DT_343_2010_S0073</code> (주가이익비율)</li>
       <li>상단 <b>시점</b> 클릭 → 최근 12개월 선택 → 적용</li>
       <li><b>다운로드</b> → xlsx</li>
-      <li>이 페이지에 업로드</li>
+      <li>위 칸에 올리기 — 칸을 바꿔 골라도 통계표ID를 읽어 맞는 칸에 넣어요</li>
     </ol>
   </div>
 </div>
@@ -114,16 +149,8 @@ h1{font-size:18px;margin:0 0 4px}
 <!-- ─── 2단계: 변환 결과 미리보기 ─── -->
 <div class="section">
   <div class="sec-title"><span class="step">2</span>변환 결과 미리보기</div>
-
   <div id="previewArea">
     <div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">엑셀을 업로드하면 여기에 표시</div>
-  </div>
-
-  <div class="meta-box" id="metaBox" style="display:none">
-    <div class="meta-row"><span>출처</span><span>KOSIS DT_343_2010_S0033</span></div>
-    <div class="meta-row"><span>기간</span><span id="metaPeriod">—</span></div>
-    <div class="meta-row"><span>최신 월</span><span id="metaAsOf">—</span></div>
-    <div class="meta-row"><span>평균 산정</span><span id="metaAvgBase">—</span></div>
   </div>
 </div>
 
@@ -131,9 +158,10 @@ h1{font-size:18px;margin:0 0 4px}
 <div class="section">
   <div class="sec-title"><span class="step">3</span>JSON 다운로드</div>
   <button class="btn" id="btnDownload" disabled>📥 market_per.json 다운로드</button>
+  <div class="dl-note" id="dlNote">코스피 파일을 올리면 받을 수 있어요.</div>
   <div class="help">
     <b>📤 배포</b>: 다운로드한 <code>market_per.json</code>을 SIGNAL X 저장소 루트에 업로드<br>
-    스크리너가 <code>fetch('./market_per.json')</code>으로 상대경로 읽음
+    스크리너가 <code>fetch('./market_per.json')</code>으로 상대경로 읽음 · 코스피 칸은 <code>categories</code>, 코스닥 칸은 <code>kosdaq.categories</code>
   </div>
   <div class="log" id="log"></div>
 </div>
@@ -144,9 +172,179 @@ h1{font-size:18px;margin:0 0 4px}
 (function(){
 'use strict';
 
-const $ = id => document.getElementById(id);
-const STATE = { wb: null, json: null };
+// ════════════════════════════════════════════════════════════
+//  [S1646] 순수 함수 — 시작 (DOM 없음 · 검증 하네스가 이 구간만 떼어 XLSX를 넣고 돌린다)
+// ════════════════════════════════════════════════════════════
+const MARKET_TABLES = { KOSPI: 'DT_343_2010_S0033', KOSDAQ: 'DT_343_2010_S0073' };
+const MARKET_NAMES = { KOSPI: '코스피', KOSDAQ: '코스닥' };
+// 스크리너(sx_screener.html _kosisPerFromFile)가 요구하는 코스피 4칸 — 하나라도 비면 스크리너가 파일을 버리고 정적값으로 간다
+const REQUIRED_KOSPI = ['KOSPI', '대형주', '중형주', '소형주'];
+const LABELS = {
+  KOSPI: {
+    'KOSPI':     'KOSPI 종합',
+    'KOSPI 200': 'KOSPI 200',
+    'KOSPI 100': 'KOSPI 100',
+    'KOSPI 50':  'KOSPI 50',
+    '제조업':     '제조업',
+    '대형주':     '대형주 (시총 5000억원+)',
+    '중형주':     '중형주 (시총 500~5000억원)',
+    '소형주':     '소형주 (시총 500억원 미만)',
+  },
+  KOSDAQ: {
+    'KOSDAQ':     'KOSDAQ 종합',
+    'KOSDAQ 150': 'KOSDAQ 150',
+    '대형주':      'KOSDAQ 대형주',
+    '중형주':      'KOSDAQ 중형주',
+    '소형주':      'KOSDAQ 소형주',
+  },
+};
 
+// 메타정보 시트 — 통계표ID·통계표명·조회기간·자료다운일자
+function readKosisMeta(wb){
+  const meta = {};
+  const name = wb.SheetNames.find(n => n.includes('메타'));
+  if(!name) return meta;
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header:1, defval:'' });
+  for(const r of rows){
+    const k = String(r[0] || '').replace(/^[○\s]+/, '').trim();
+    const v = String(r[1] || '').trim();
+    if(k === '통계표ID') meta.tableId = v;
+    else if(k === '통계표명') meta.tableName = v;
+    else if(k === '조회기간') meta.range = v;
+    else if(k === '자료다운일자') meta.downloadedAt = v;
+  }
+  return meta;
+}
+
+// 시장 가리기 — ① 통계표ID ② 통계표명 ③ 첫 데이터 행 이름
+function detectMarket(meta, rows){
+  for(const mk of Object.keys(MARKET_TABLES)){ if(meta.tableId === MARKET_TABLES[mk]) return mk; }
+  if(/코스닥/.test(meta.tableName || '')) return 'KOSDAQ';
+  if(/코스피/.test(meta.tableName || '')) return 'KOSPI';
+  const first = (rows && rows[1]) ? String(rows[1][0] || '').trim().toUpperCase() : '';
+  if(first.indexOf('KOSDAQ') === 0) return 'KOSDAQ';
+  if(first.indexOf('KOSPI') === 0) return 'KOSPI';
+  return null;
+}
+
+// KOSIS 엑셀 → 시장 한 벌 { market, tableId, tableName, asOf, asOfReadable, period, monthCount, downloadedAt, categories, skipped }
+//   '데이터' 시트: 지수종류별(1) · 지수종류별(2) · YYYY.MM 열들. "-"(적자·미산출) 달은 평균에서 뺀다(구판과 같은 규칙).
+function parseKosisXlsx(wb){
+  const sheetName = wb.SheetNames.find(n => n.includes('데이터')) || wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  if(!ws) throw new Error("'데이터' 시트 찾을 수 없음");
+  const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+  if(rows.length < 2) throw new Error('데이터 행이 없어요');
+
+  const meta = readKosisMeta(wb);
+  const market = detectMarket(meta, rows);
+  if(!market) throw new Error('코스피·코스닥 PER 통계표가 아니에요 (통계표ID ' + (meta.tableId || '없음') + ')');
+
+  const headers = rows[0];
+  const monthCols = [];
+  for(let i=2; i<headers.length; i++){
+    const h = String(headers[i]).trim();
+    if(/^\d{4}\.\d{2}$/.test(h)) monthCols.push({ idx:i, label:h });
+  }
+  if(monthCols.length === 0) throw new Error('월별 컬럼(YYYY.MM) 찾을 수 없음');
+
+  const latestMonth = monthCols[monthCols.length - 1].label;
+  const oldestMonth = monthCols[0].label;
+  const monthCount = monthCols.length;
+  const asOf = latestMonth.replace('.', '');     // '2026.08' → '202608'
+  const periodLabel = `${oldestMonth.replace('.','')}~${asOf} (${monthCount}개월)`;
+
+  const labels = LABELS[market] || {};
+  const categories = {};
+  const skipped = [];
+  for(let r=1; r<rows.length; r++){
+    const row = rows[r];
+    const c1 = String(row[0] || '').trim();
+    const c2 = String(row[1] || '').trim();
+    const cat = (c1 === '시가총액규모별' || c1 === '') ? c2 : (c2 === '소계' ? c1 : c2);
+    if(!cat) continue;
+    const pts = monthCols.map(m => ({ m: m.label, v: parseFloat(row[m.idx]) })).filter(p => !isNaN(p.v) && p.v > 0);
+    if(pts.length === 0){ skipped.push(cat); continue; }
+    const vals = pts.map(p => p.v);
+    const latest = vals[vals.length - 1];
+    const avg = vals.reduce((a,b)=>a+b, 0) / vals.length;
+    categories[cat] = {
+      latest: Math.round(latest * 100) / 100,
+      avgRecent: Math.round(avg * 100) / 100,
+      label: labels[cat] || cat,
+      n: vals.length,                                        // 평균에 쓴 달 수
+      latestMonth: pts[pts.length - 1].m.replace('.', ''),   // latest 값의 달(YYYYMM)
+    };
+  }
+  if(Object.keys(categories).length === 0) throw new Error('값이 있는 칸이 하나도 없어요');
+
+  return {
+    market,
+    tableId: meta.tableId || MARKET_TABLES[market],
+    tableName: meta.tableName || (MARKET_NAMES[market] + ' 주가이익비율 (PER)'),
+    asOf,
+    asOfReadable: `${asOf.slice(0,4)}년 ${parseInt(asOf.slice(4), 10)}월`,
+    period: periodLabel,
+    monthCount,
+    downloadedAt: meta.downloadedAt || '',
+    categories,
+    skipped,
+  };
+}
+
+// 두 시장 → market_per.json. 코스피가 뼈대(스크리너가 읽는 categories 자리 그대로) · 코스닥은 kosdaq 블록(이름 충돌 없음)
+function buildMarketPer(kospi, kosdaq, today){
+  if(!kospi) throw new Error('코스피 파일이 필요해요 — 스크리너는 코스피 칸(KOSPI·대형주·중형주·소형주)을 읽어요');
+  if(kospi.market !== 'KOSPI') throw new Error('코스피 자리에 ' + (MARKET_NAMES[kospi.market] || kospi.market) + ' 통계표가 들어왔어요');
+  if(kosdaq && kosdaq.market !== 'KOSDAQ') throw new Error('코스닥 자리에 ' + (MARKET_NAMES[kosdaq.market] || kosdaq.market) + ' 통계표가 들어왔어요');
+  const miss = REQUIRED_KOSPI.filter(k => !(kospi.categories[k] && kospi.categories[k].avgRecent > 0));
+  if(miss.length) throw new Error('코스피 필수 칸이 비었어요: ' + miss.join(', '));
+
+  const out = {
+    _meta: {
+      version: kosdaq ? 2 : 1,
+      source: 'KOSIS 국가통계포털 (kosis.kr)',
+      tableId: kospi.tableId,
+      tableName: kospi.tableName,
+      asOf: kospi.asOf,
+      asOfReadable: kospi.asOfReadable,
+      lastUpdated: today,
+      period: kospi.period,
+      monthCount: kospi.monthCount,
+      updateFrequency: '월 1회 (KOSIS 갱신 후)',
+      note: 'KOSIS에서 다운로드한 월별 PER 데이터의 산술평균. 클라이언트는 avgRecent을 baseline으로 사용.',
+    },
+    categories: kospi.categories,
+  };
+  if(kospi.downloadedAt) out._meta.downloadedAt = kospi.downloadedAt;
+  if(kosdaq){
+    out._meta.markets = ['KOSPI', 'KOSDAQ'];
+    out._meta.layout = 'categories=코스피 · kosdaq.categories=코스닥(기준월이 시장마다 다를 수 있음) · n=평균에 쓴 달 수("-" 적자·미산출 달 제외) · latestMonth=latest 값의 달';
+    out.kosdaq = {
+      _meta: {
+        tableId: kosdaq.tableId,
+        tableName: kosdaq.tableName,
+        asOf: kosdaq.asOf,
+        asOfReadable: kosdaq.asOfReadable,
+        period: kosdaq.period,
+        monthCount: kosdaq.monthCount,
+        downloadedAt: kosdaq.downloadedAt,
+      },
+      categories: kosdaq.categories,
+    };
+  }
+  return out;
+}
+// ════════════════════════════════════════════════════════════
+//  [S1646] 순수 함수 — 끝
+// ════════════════════════════════════════════════════════════
+
+const $ = id => document.getElementById(id);
+const STATE = { KOSPI: null, KOSDAQ: null, json: null };
+const SLOT_HINT = { KOSPI: '코스피 PER 통계표 (xlsx) · 필수', KOSDAQ: '코스닥 PER 통계표 (xlsx) · 선택' };
+const EMPTY_PREVIEW = '<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">엑셀을 업로드하면 여기에 표시</div>';
+
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function log(msg, level){
   const div = document.createElement('div');
   div.className = 'log-line ' + (level || '');
@@ -162,166 +360,131 @@ function toast(msg){
   setTimeout(()=>t.classList.remove('show'), 2000);
 }
 function vib(ms){ try{ navigator.vibrate && navigator.vibrate(ms); }catch(_){} }
+function today(){ return new Date().toISOString().slice(0, 10); }
 
 // ════════════════════════════════════════════════════════════
-//  엑셀 파싱 + JSON 변환
+//  업로드 칸 표시
 // ════════════════════════════════════════════════════════════
-function parseKosisXlsx(wb){
-  // KOSIS 엑셀은 '데이터' 시트에 카테고리(C1, C2) + 월별 컬럼
-  // 행 8개: KOSPI/KOSPI200/KOSPI100/KOSPI50/제조업/대형주/중형주/소형주
-  // 컬럼: 지수종류별(1), 지수종류별(2), 2025.05, 2025.06, ..., 2026.04
-  const sheetName = wb.SheetNames.find(n => n.includes('데이터')) || wb.SheetNames[0];
-  const ws = wb.Sheets[sheetName];
-  if(!ws) throw new Error("'데이터' 시트 찾을 수 없음");
-
-  const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
-  if(rows.length < 9) throw new Error('데이터 행 부족 (8행 기대)');
-
-  // 1행: 헤더, 2행~ 데이터 (header:1이라 0-index)
-  const headers = rows[0];
-  const monthCols = [];
-  for(let i=2; i<headers.length; i++){
-    const h = String(headers[i]).trim();
-    if(/^\d{4}\.\d{2}$/.test(h)) monthCols.push({ idx:i, label:h });
-  }
-  if(monthCols.length === 0) throw new Error('월별 컬럼(YYYY.MM) 찾을 수 없음');
-
-  const latestMonth = monthCols[monthCols.length - 1].label;
-  const oldestMonth = monthCols[0].label;
-  const monthCount = monthCols.length;
-  const asOf = latestMonth.replace('.', '');     // '2026.04' → '202604'
-  const periodLabel = `${oldestMonth.replace('.','')}~${asOf} (${monthCount}개월)`;
-
-  // 각 카테고리별 latest + 평균 산출
-  const categories = {};
-  let lastCat1 = '';
-  for(let r=1; r<rows.length; r++){
-    const row = rows[r];
-    const c1 = String(row[0] || '').trim();
-    const c2 = String(row[1] || '').trim();
-    const cat = (c1 === '시가총액규모별' || c1 === '') ? c2 : (c2 === '소계' ? c1 : c2);
-    if(!cat) continue;
-    const vals = monthCols.map(m => parseFloat(row[m.idx])).filter(v => !isNaN(v) && v > 0);
-    if(vals.length === 0) continue;
-    const latest = vals[vals.length - 1];
-    const avg = vals.reduce((a,b)=>a+b, 0) / vals.length;
-    const labelMap = {
-      'KOSPI':     'KOSPI 종합',
-      'KOSPI 200': 'KOSPI 200',
-      'KOSPI 100': 'KOSPI 100',
-      'KOSPI 50':  'KOSPI 50',
-      '제조업':     '제조업',
-      '대형주':     '대형주 (시총 5000억원+)',
-      '중형주':     '중형주 (시총 500~5000억원)',
-      '소형주':     '소형주 (시총 500억원 미만)',
-    };
-    categories[cat] = {
-      latest: Math.round(latest * 100) / 100,
-      avgRecent: Math.round(avg * 100) / 100,
-      label: labelMap[cat] || cat,
-    };
-  }
-
-  const today = new Date().toISOString().slice(0, 10);
-  return {
-    _meta: {
-      version: 1,
-      source: 'KOSIS 국가통계포털 (kosis.kr)',
-      tableId: 'DT_343_2010_S0033',
-      tableName: '코스피 주가이익비율 (PER)',
-      asOf: asOf,
-      asOfReadable: `${asOf.slice(0,4)}년 ${parseInt(asOf.slice(4))}월`,
-      lastUpdated: today,
-      period: periodLabel,
-      monthCount: monthCount,
-      updateFrequency: '월 1회 (KOSIS 갱신 후)',
-      note: 'KOSIS에서 다운로드한 월별 PER 데이터의 산술평균. 클라이언트는 avgRecent을 baseline으로 사용.',
-    },
-    categories: categories,
-  };
+function setCard(slot, state, name, status){
+  const card = $('card-' + slot);
+  card.classList.remove('loaded', 'error');
+  if(state) card.classList.add(state);
+  $('name-' + slot).textContent = name;
+  $('status-' + slot).textContent = status;
+}
+function clearSlot(slot){
+  STATE[slot] = null;
+  $('file-' + slot).value = '';
+  setCard(slot, null, '파일 선택', SLOT_HINT[slot]);
 }
 
 // ════════════════════════════════════════════════════════════
 //  미리보기 렌더링
 // ════════════════════════════════════════════════════════════
-function renderPreview(data){
-  const cats = data.categories;
-  let html = '<table class="preview-table"><thead><tr><th>카테고리</th><th class="num">최신</th><th class="num">평균</th></tr></thead><tbody>';
-  for(const [name, c] of Object.entries(cats)){
-    html += `<tr>
-      <td class="cat">${name}</td>
+function marketBlock(p){
+  let html = `<div class="mk-block"><div class="mk-head"><b>${MARKET_NAMES[p.market]}</b><span>${esc(p.tableId)}</span></div>`;
+  html += '<table class="preview-table"><thead><tr><th>카테고리</th><th class="num">최신</th><th class="num">평균</th><th class="months">달</th></tr></thead><tbody>';
+  for(const [name, c] of Object.entries(p.categories)){
+    const sparse = c.n < p.monthCount;
+    html += `<tr${sparse ? ' class="sparse"' : ''}>
+      <td class="cat">${esc(name)}</td>
       <td class="num num-latest">${c.latest.toFixed(2)}</td>
       <td class="num">${c.avgRecent.toFixed(2)}</td>
+      <td class="months">${c.n}/${p.monthCount}</td>
     </tr>`;
   }
   html += '</tbody></table>';
-  $('previewArea').innerHTML = html;
+  html += `<div class="meta-box">
+    <div class="meta-row"><span>기간</span><span>${esc(p.period)}</span></div>
+    <div class="meta-row"><span>최신 월</span><span>${esc(p.asOfReadable)}</span></div>
+    <div class="meta-row"><span>평균 산정</span><span>${p.monthCount}개월 산술평균("-" 달 제외)</span></div>
+    ${p.downloadedAt ? `<div class="meta-row"><span>자료 다운로드</span><span>${esc(p.downloadedAt)}</span></div>` : ''}
+  </div></div>`;
+  return html;
+}
+function notices(k, q){
+  const items = [];
+  if(k && q && k.asOf !== q.asOf){
+    items.push(`기준월이 달라요 — 코스피 <b>${esc(k.asOfReadable)}</b>, 코스닥 <b>${esc(q.asOfReadable)}</b>까지예요. 두 시장 모두 받은 그대로 담아요.`);
+  }
+  for(const p of [k, q]){
+    if(!p) continue;
+    const sparse = Object.entries(p.categories).filter(([, c]) => c.n < p.monthCount).map(([nm, c]) => `${esc(nm)}(${c.n}/${p.monthCount})`);
+    if(sparse.length) items.push(`${MARKET_NAMES[p.market]} ${sparse.join(' · ')}는 "-" 달(적자·미산출)을 빼고 평균했어요.`);
+    if(p.skipped.length) items.push(`${MARKET_NAMES[p.market]} ${p.skipped.map(esc).join(' · ')}는 12개월 내내 값이 없어 빠졌어요.`);
+  }
+  return items.length ? `<div class="notice"><b>⚠ 확인</b><ul>${items.map(t => `<li>${t}</li>`).join('')}</ul></div>` : '';
+}
+function rebuild(){
+  const k = STATE.KOSPI && STATE.KOSPI.parsed;
+  const q = STATE.KOSDAQ && STATE.KOSDAQ.parsed;
+  $('previewArea').innerHTML = (k || q) ? ((k ? marketBlock(k) : '') + (q ? marketBlock(q) : '') + notices(k, q)) : EMPTY_PREVIEW;
 
-  $('metaBox').style.display = 'block';
-  $('metaPeriod').textContent = data._meta.period;
-  $('metaAsOf').textContent = data._meta.asOfReadable;
-  $('metaAvgBase').textContent = `${data._meta.monthCount}개월 산술평균`;
+  STATE.json = null;
+  let note = '';
+  if(k){
+    try{
+      STATE.json = buildMarketPer(k, q, today());
+      note = q ? '코스피 + 코스닥이 한 파일에 담겨요.' : '코스닥 파일을 올리지 않으면 코스피만 담겨요.';
+    }catch(err){
+      log(`✗ ${err.message}`, 'err');
+      note = err.message;
+    }
+  } else if(q){
+    note = '코스피 파일도 올려 주세요 — 스크리너가 코스피 칸을 읽어요.';
+  } else {
+    note = '코스피 파일을 올리면 받을 수 있어요.';
+  }
+  const btn = $('btnDownload');
+  btn.disabled = !STATE.json;
+  btn.classList.remove('downloaded');
+  btn.textContent = STATE.json ? (q ? '📥 market_per.json 다운로드 (코스피+코스닥)' : '📥 market_per.json 다운로드 (코스피만)') : '📥 market_per.json 다운로드';
+  $('dlNote').textContent = note;
 }
 
 // ════════════════════════════════════════════════════════════
-//  파일 업로드 핸들러
+//  파일 업로드 — 통계표ID로 시장을 가려 맞는 칸에 넣는다
 // ════════════════════════════════════════════════════════════
-$('fileInput').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
+async function handleFile(file, slot){
   if(!file) return;
   vib(10);
-
-  const card = $('uploadCard');
-  card.classList.remove('loaded', 'error');
-  $('uploadName').textContent = file.name;
-  $('uploadStatus').textContent = '처리 중...';
-
+  setCard(slot, null, file.name, '처리 중...');
   try{
-    if(typeof XLSX === 'undefined'){
-      throw new Error('XLSX 라이브러리 로드 실패 (CDN 차단 가능성)');
-    }
+    if(typeof XLSX === 'undefined') throw new Error('XLSX 라이브러리 로드 실패 (CDN 차단 가능성)');
     log(`📁 ${file.name} 로드 중...`, 'info');
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, {type:'array', cellDates:false});
-    STATE.wb = wb;
-    log(`✓ 엑셀 파싱 완료 (${wb.SheetNames.length}개 시트)`, 'ok');
-
-    const data = parseKosisXlsx(wb);
-    STATE.json = data;
-    const catCount = Object.keys(data.categories).length;
-    log(`✓ ${catCount}개 카테고리 추출 (기간: ${data._meta.period})`, 'ok');
-
-    renderPreview(data);
-    card.classList.add('loaded');
-    $('uploadStatus').textContent = `✓ ${catCount}개 카테고리 / ${data._meta.monthCount}개월`;
-    $('btnDownload').disabled = false;
-    toast('변환 완료');
+    const p = parseKosisXlsx(wb);
+    if(p.market !== slot){
+      clearSlot(slot);
+      log(`↪ ${file.name}은 ${MARKET_NAMES[p.market]} 통계표라 ${MARKET_NAMES[p.market]} 칸에 넣었어요`, 'warn');
+    }
+    if(STATE[p.market]) log(`↻ ${MARKET_NAMES[p.market]} 파일을 새 파일로 바꿨어요`, 'info');
+    STATE[p.market] = { parsed: p, fileName: file.name };
+    const catCount = Object.keys(p.categories).length;
+    setCard(p.market, 'loaded', file.name, `✓ ${catCount}개 칸 · ${p.monthCount}개월 · ${p.asOfReadable}까지`);
+    log(`✓ ${MARKET_NAMES[p.market]} ${catCount}개 칸 추출 (${p.period} · ${p.tableId})`, 'ok');
+    rebuild();
+    toast(`${MARKET_NAMES[p.market]} 변환 완료`);
   } catch(err){
     log(`✗ ${err.message}`, 'err');
-    card.classList.add('error');
-    $('uploadStatus').textContent = '✗ ' + err.message;
-    STATE.json = null;
-    $('btnDownload').disabled = true;
+    STATE[slot] = null;
+    setCard(slot, 'error', file.name, '✗ ' + err.message);
+    rebuild();
   }
-});
+}
 
-// 리셋 버튼
-$('resetBtn').addEventListener('click', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  vib(5);
-  STATE.wb = null;
-  STATE.json = null;
-  $('fileInput').value = '';
-  $('uploadCard').classList.remove('loaded', 'error');
-  $('uploadName').textContent = '파일 선택';
-  $('uploadStatus').textContent = '코스피 PER 통계표 (xlsx)';
-  $('previewArea').innerHTML = '<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">엑셀을 업로드하면 여기에 표시</div>';
-  $('metaBox').style.display = 'none';
-  $('btnDownload').disabled = true;
-  $('btnDownload').classList.remove('downloaded');
-  log('🔄 초기화', 'info');
-});
+for(const slot of ['KOSPI', 'KOSDAQ']){
+  $('file-' + slot).addEventListener('change', (e) => { handleFile(e.target.files[0], slot); });
+  $('reset-' + slot).addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    vib(5);
+    clearSlot(slot);
+    rebuild();
+    log(`🔄 ${MARKET_NAMES[slot]} 초기화`, 'info');
+  });
+}
 
 // ════════════════════════════════════════════════════════════
 //  다운로드
@@ -341,18 +504,20 @@ $('btnDownload').addEventListener('click', () => {
     try{ document.body.removeChild(a); }catch(_){}
     URL.revokeObjectURL(url);
   }, 100);
-  log('💾 market_per.json 다운로드', 'ok');
+  const both = !!STATE.json.kosdaq;
+  log(`💾 market_per.json 다운로드 (${both ? '코스피+코스닥' : '코스피만'})`, 'ok');
   toast('market_per.json 저장');
   const btn = $('btnDownload');
+  const label = btn.textContent;
   btn.classList.add('downloaded');
-  btn.textContent = '✓ 다운로드 완료';
+  btn.textContent = '다운로드 완료';
   setTimeout(() => {
     btn.classList.remove('downloaded');
-    btn.textContent = '📥 market_per.json 다운로드';
+    btn.textContent = label;
   }, 3000);
 });
 
-log('🚀 시장평균 PER 빌더 준비 완료', 'info');
+log('🚀 시장평균 PER 빌더 준비 완료 (코스피·코스닥)', 'info');
 })();
 </script>
 </body>
